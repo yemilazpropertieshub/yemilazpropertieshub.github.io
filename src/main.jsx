@@ -81,6 +81,7 @@ function App() {
   const [sendingTenant, setSendingTenant] = useState(null);
   const [downloadingTenant, setDownloadingTenant] = useState(null);
   const [toast, setToast] = useState('');
+  const [showComplaintRoom, setShowComplaintRoom] = useState(false);
 
   useEffect(() => {
     document.title = auth
@@ -453,8 +454,22 @@ function App() {
   const displayedTenants = visibleTenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase()));
   const dashboardAds = propertyRecords.filter((property) => property.status === 'available' && property.is_advertised);
 
+  async function submitComplaint(event) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    if (!supabase) { setToast('Complaint submissions are temporarily unavailable. Please try again later.'); return; }
+    const form = new FormData(formElement);
+    const { error } = await supabase.from('property_complaints').insert({
+      complainant_name: form.get('name'), email: form.get('email'), phone: form.get('phone') || null,
+      stakeholder_role: form.get('role'), property_address: form.get('property'), category: form.get('category'),
+      subject: form.get('subject'), details: form.get('details'),
+    });
+    if (error) { setToast('We could not submit your complaint. Please try again.'); return; }
+    formElement.reset(); setToast('Your complaint has been submitted securely. Our team will review it.');
+  }
+
   if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/>
-    <PublicLanding properties={dashboardAds} onSignIn={() => setAuthModal(true)}/>
+    {showComplaintRoom ? <PublicComplaintRoom onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={dashboardAds} onSignIn={() => setAuthModal(true)} onComplaint={() => setShowComplaintRoom(true)}/>}
     {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onClose={() => setAuthModal(false)} signing={signing}/>}
     {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
@@ -537,16 +552,20 @@ function App() {
   </>;
 }
 
-function PublicLanding({ properties, onSignIn }) {
+function PublicLanding({ properties, onSignIn, onComplaint }) {
   return <div className="public-site">
-    <header className="public-nav"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><nav><a href="#homes">Find a home</a><a href="#about">About us</a><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
+    <header className="public-nav"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><nav><a href="#homes">Find a home</a><a href="#about">About us</a><button className="public-text-button" onClick={onComplaint}>Complaint room</button><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
     <main id="top">
       <section className="public-hero"><div className="public-hero-copy"><span className="public-eyebrow"><i/> THOUGHTFUL LIVING IN NIGERIA &amp; BEYOND</span><h1>Find a place<br/>to <em>call yours.</em></h1><p>Considered homes and dependable property care, in Nigeria and around the world.</p><div className="public-hero-actions"><a className="primary-button" href="#homes">Explore available homes <ArrowRight size={16}/></a><button className="public-text-button" onClick={onSignIn}>Property manager? Sign in</button></div><div className="public-trust"><span><Check size={14}/> Carefully selected homes</span><span><Check size={14}/> Personal service</span></div></div><div className="public-hero-photo"><img src="/lagos-home.png" alt="A contemporary home in Lagos"/><div className="hero-photo-note"><span className="live-dot"/> YEMILAZ PROPERTIES <b>Homes for a better everyday.</b></div></div></section>
       <section className="public-listings" id="homes"><div className="public-section-heading"><div><span className="public-eyebrow">THE CURRENT COLLECTION</span><h2>Homes worth coming home to.</h2><p>Browse properties currently available to rent or buy.</p></div><span className="public-count">{properties.length} {properties.length === 1 ? 'home' : 'homes'} available</span></div>{properties.length ? <div className="property-grid">{properties.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="public-empty"><Building2 size={25}/><h3>New homes are on the way.</h3><p>Check back soon for available Yemilaz Properties listings.</p></div>}</section>
       <section className="public-about" id="about"><div><span className="public-eyebrow">PROPERTY, MADE PERSONAL</span><h2>Good homes.<br/>Thoughtful care.</h2></div><p>From discovering your next home to keeping every detail in order, Yemilaz Properties brings people and places together with clarity, care and local expertise.</p><button className="about-signin" onClick={onSignIn}>Property manager sign in <ArrowUpRight size={15}/></button></section>
     </main>
-    <footer className="public-footer"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><span>Thoughtful living, beautifully managed.</span><span>© {new Date().getFullYear()} Yemilaz Properties</span></footer>
+    <footer className="public-footer"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><button className="public-text-button" onClick={onComplaint}>Lodge a property complaint</button><span>Thoughtful living, beautifully managed.</span><span>© {new Date().getFullYear()} Yemilaz Properties</span></footer>
   </div>;
+}
+
+function PublicComplaintRoom({ onBack, onSubmit }) {
+  return <div className="public-site complaint-site"><header className="public-nav"><button className="public-brand complaint-back" onClick={onBack}><BrandLockup name="Yemilaz Properties" logo="horizon"/></button><button className="sign-in" onClick={onBack}>Back to homes</button></header><main className="complaint-main"><div className="complaint-intro"><span className="public-eyebrow">A SHARED SPACE FOR PROPERTY CONCERNS</span><h1>Complaint room</h1><p>Landlords, tenants, agents, caretakers and anyone involved with a property can raise an issue here. Share the details and our team will follow up.</p></div><form className="panel complaint-form" onSubmit={onSubmit}><div className="form-row"><label>Your full name<input required name="name" autoComplete="name"/></label><label>Email address<input required name="email" type="email" autoComplete="email"/></label></div><div className="form-row"><label>Phone number <small>(optional)</small><input name="phone" type="tel" autoComplete="tel"/></label><label>Your role<select required name="role" defaultValue=""><option value="" disabled>Select your connection</option><option>Landlord</option><option>Tenant</option><option>Agent</option><option>Caretaker</option><option>Buyer or seller</option><option>Other</option></select></label></div><label>Property address or name<input required name="property" placeholder="Address, building or listing name"/></label><div className="form-row"><label>Issue type<select required name="category" defaultValue=""><option value="" disabled>Select a category</option><option>Repairs and maintenance</option><option>Rent or payment</option><option>Property access</option><option>Conduct or safety</option><option>Agreement or documentation</option><option>Other</option></select></label><label>Complaint subject<input required name="subject" maxLength="120"/></label></div><label>What happened?<textarea required name="details" rows="6" maxLength="5000" placeholder="Include relevant dates and what outcome you are seeking."/></label><p className="complaint-privacy">Your contact details and complaint will be shared only with the Yemilaz Properties team for follow-up.</p><button className="primary-button" type="submit"><FileText size={16}/> Submit complaint</button></form></main><footer className="public-footer"><span>© {new Date().getFullYear()} Yemilaz Properties</span><span>We’ll handle your concern with care.</span></footer></div>;
 }
 
 function AuthDialog({ onSubmit, onSignUp, onClose, signing }) {
