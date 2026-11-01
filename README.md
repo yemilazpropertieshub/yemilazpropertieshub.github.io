@@ -1,23 +1,33 @@
 # Yemilaz Properties
 
-A responsive property marketing and management starter built with Node.js, React, Vite, and Supabase. The dashboard preview uses sample data until Supabase is configured. The featured Lagos listings, tenant names, activity, and summary totals are illustrative placeholders; replace them with verified company information before publishing.
+A responsive property marketing and management website built with Node.js, React, Vite, and Supabase.
+
+## Property and tenant workflow
+
+- The public homepage includes manager sign-in and property advertisements.
+- Only properties marked **Advertise** and still **Available** appear on the public homepage.
+- Register tenants and record rent or deposit payments. A property can be allocated only after a paid rent or deposit record exists.
+- Allocating a property marks it occupied and removes it from public advertisements. Releasing or changing an allocation returns the old property to Available.
+- Record later rent, deposit, and service-charge payments in **Payments & charges**.
+- Delete a property from **Properties**. Its tenant and payment history are retained, with the tenant allocation cleared.
+
+## One-time Supabase update
+
+Before deploying this version, open the project’s **Supabase Dashboard → SQL Editor**, open [`supabase/migrations/20261101_property_allocation_and_advertising.sql`](supabase/migrations/20261101_property_allocation_and_advertising.sql), paste its contents into a new query, and run it. This adds the advertisement flag, public read access for advertised available properties, safe property deletion behavior, and the transaction that allocates properties after payment.
+
+Create the manager account under **Authentication → Users** in Supabase. The website has a manager sign-in, not a public sign-up form.
+
+## Deploy with GitHub Desktop
+
+1. Open the repository in GitHub Desktop and review the changed files.
+2. Commit the changes to `main`, then click **Push origin**.
+3. GitHub Actions builds and publishes the site automatically. Wait for the newest run to turn green.
+
+The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_KEY` from repository Actions secrets. Never put a Supabase service-role/secret key in this browser app.
 
 ## Run locally
 
 1. Install Node.js 20 or newer.
-2. Run `npm install` then `npm run dev`.
-3. Copy `.env.example` to `.env.local` and set your Supabase project URL and **publishable/anon** key.
-4. Run `supabase/schema.sql` in the Supabase SQL Editor.
-
-Never put a Supabase service-role key in this browser app. The schema enables row-level security for owner-private management records. Create the first user in Supabase Authentication; use that account for property-management data.
-
-## What's included
-
-- Public-facing featured rental and for-sale property cards, with a responsive brand homepage/dashboard.
-- Tenant lease form plus record forms for properties, service charges, guarantors, caretakers, and agents.
-- Supabase schema for properties, lease dates and amounts, deposits, guarantors, staff, and individually tracked service charges.
-- Owner-scoped RLS policies for private records.
-
-## GitHub Pages
-
-The included GitHub Actions workflow builds and deploys on pushes to `main`. In repository Settings → Pages, choose **GitHub Actions** as the build source. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under repository Settings → Secrets and variables → Actions. For custom Node server-side work or private server credentials, use a Node host (for example Render or Railway) instead of Pages.
+2. Run `npm install` and then `npm run dev`.
+3. Copy `.env.example` to `.env.local` and set the Supabase project URL and publishable/anon key.
+4. Run `supabase/schema.sql` for a new Supabase project, or use the migration above for an existing project.
