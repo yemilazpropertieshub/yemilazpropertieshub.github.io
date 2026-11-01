@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import {
   ArrowRight, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
-  CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut,
+  CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut, UserRound,
   Menu, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Trash2, Users, Wallet, X,
 } from 'lucide-react';
@@ -24,7 +24,7 @@ const demoTenants = [
 ];
 const nav = [
   { title: 'Workspace', links: [['Overview', LayoutDashboard], ['Properties', Building2], ['Tenants', Users], ['Payments & charges', Wallet]] },
-  { title: 'People', links: [['Guarantors', ShieldCheck], ['Caretakers', KeyRound], ['Agents', Users]] },
+  { title: 'People', links: [['Guarantors', ShieldCheck], ['Caretakers', KeyRound], ['Agents', Users], ['Landlord profile', UserRound]] },
 ];
 
 function App() {
@@ -32,6 +32,8 @@ function App() {
   const [tenants, setTenants] = useState(demoTenants);
   const [propertyRecords, setPropertyRecords] = useState([]);
   const [paymentRecords, setPaymentRecords] = useState([]);
+  const [staffRecords, setStaffRecords] = useState([]);
+  const [landlordProfile, setLandlordProfile] = useState(null);
   const [records, setRecords] = useState([]);
   const [menu, setMenu] = useState(false);
   const [modal, setModal] = useState(false);
@@ -42,6 +44,7 @@ function App() {
   const [auth, setAuth] = useState(null);
   const [signing, setSigning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sendingTenant, setSendingTenant] = useState(null);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -71,12 +74,17 @@ function App() {
       Promise.all([
         supabase.from('tenants').select('*').eq('owner_id', auth.id).order('created_at', { ascending: false }),
         supabase.from('service_charges').select('*').eq('owner_id', auth.id).order('created_at', { ascending: false }),
-      ]).then(([tenantResult, paymentResult]) => {
+        supabase.from('staff').select('*').eq('owner_id', auth.id).order('full_name'),
+        supabase.from('landlord_profiles').select('*').eq('user_id', auth.id).maybeSingle(),
+      ]).then(([tenantResult, paymentResult, staffResult, profileResult]) => {
         if (!active) return;
         if (tenantResult.error) setToast(tenantResult.error.message);
         else setTenants(tenantResult.data || []);
         if (paymentResult.error) setToast(paymentResult.error.message);
         else setPaymentRecords(paymentResult.data || []);
+        if (!staffResult.error) setStaffRecords(staffResult.data || []);
+        if (profileResult.error) setToast(profileResult.error.message);
+        else setLandlordProfile(profileResult.data);
       });
     } else {
       setTenants(demoTenants);
@@ -84,6 +92,57 @@ function App() {
     }
     return () => { active = false; };
   }, [auth]);
+
+  async function registerLandlord(event) {
+    event.preventDefault();
+    if (!supabase) { setToast('Supabase is not configured for this deployment.'); return; }
+    setSigning(true);
+    const form = new FormData(event.currentTarget);
+    const { error } = await supabase.auth.signUp({
+      email: form.get('email'), password: form.get('password'),
+      options: { data: { full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties' } },
+    });
+    setSigning(false);
+    if (error) setToast(error.message);
+    else { setAuthModal(false); setToast('Landlord account created. Check your email if Supabase asks you to confirm it.'); }
+  }
+
+  async function saveLandlordProfile(event) {
+    event.preventDefault();
+    if (!auth || !supabase) return;
+    const form = new FormData(event.currentTarget);
+    const profile = {
+      user_id: auth.id, full_name: form.get('full_name'), business_name: form.get('business_name'),
+      phone: form.get('phone') || null, business_address: form.get('business_address') || null,
+      lawyer_name: form.get('lawyer_name') || null, lawyer_email: form.get('lawyer_email') || null,
+      agreement_terms: form.get('agreement_terms'), house_rules: form.get('house_rules'), updated_at: new Date().toISOString(),
+    };
+    setSaving(true);
+    const { data, error } = await supabase.from('landlord_profiles').upsert(profile).select().single();
+    setSaving(false);
+    if (error) { setToast(error.message); return; }
+    setLandlordProfile(data); setToast('Landlord profile and document templates saved.');
+  }
+
+  async function sendTenantPackets(tenantId) {
+    if (!import.meta.env.VITE_DOCUMENT_API_URL) { setToast('Set VITE_DOCUMENT_API_URL and deploy the Node document service before sending PDFs.'); return; }
+    if (!supabase) return;
+    setSendingTenant(tenantId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`${import.meta.env.VITE_DOCUMENT_API_URL.replace(/\/$/, '')}/api/tenant-packets`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ tenantId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not send tenant documents');
+      const sent = result.deliveries.filter((item) => item.status === 'sent').length;
+      const failed = result.deliveries.filter((item) => item.status === 'failed');
+      setToast(`${sent} individual PDF email${sent === 1 ? '' : 's'} sent${failed.length ? `; failed for ${failed.map((item) => item.role).join(', ')}` : ''}.`);
+    } catch (sendError) {
+      setToast(`PDF delivery failed: ${sendError.message}`);
+    } finally { setSendingTenant(null); }
+  }
 
   useEffect(() => {
     if (!auth || !supabase) { setRecords([]); return; }
@@ -131,15 +190,29 @@ function App() {
     const firstPayment = Number(form.get('initial_payment') || 0);
     const leaseStart = String(form.get('lease_start'));
     const leaseEnd = String(form.get('lease_end'));
+    if (!String(form.get('email') || '').trim() || !String(form.get('guarantor_email') || '').trim()) {
+      setToast('Tenant and guarantor email addresses are required for individual PDF delivery.'); return;
+    }
+    if (!landlordProfile?.lawyer_email) { setToast('Add the lawyer’s email in Landlord profile before registering a tenant.'); return; }
+    const hasSelectedCopyRecipient = [form.get('agent_id'), form.get('caretaker_id')].some((id) => staffRecords.some((person) => person.id === id && person.email));
+    if (!hasSelectedCopyRecipient) { setToast('Select an agent or caretaker with an email address so they receive their own PDF copy.'); return; }
     if (propertyId && firstPayment <= 0) { setToast('Record a rent or deposit payment before allocating this property.'); return; }
     setSaving(true);
     const { data: tenant, error } = await supabase.from('tenants').insert({
       owner_id: auth.id, full_name: name, email: form.get('email') || null, phone: form.get('phone') || null,
       property_id: null, lease_start: leaseStart, lease_end: leaseEnd, rent_amount: amount,
       rent_frequency: form.get('rent_frequency'), deposit_amount: Number(form.get('deposit_amount') || 0),
+      agent_id: form.get('agent_id') || null, caretaker_id: form.get('caretaker_id') || null,
       status: 'active', notes: form.get('notes') || null,
     }).select().single();
     if (error) { setSaving(false); setToast(error.message); return; }
+    const { error: guarantorError } = await supabase.from('guarantors').insert({
+      owner_id: auth.id, tenant_id: tenant.id, full_name: form.get('guarantor_name'),
+      email: form.get('guarantor_email'), phone: form.get('guarantor_phone') || null,
+      relationship: form.get('guarantor_relationship') || null, occupation: form.get('guarantor_occupation') || null,
+      address: form.get('guarantor_address') || null,
+    });
+    if (guarantorError) { setSaving(false); setToast(`Tenant saved but guarantor details failed: ${guarantorError.message}`); setTenants((current) => [tenant, ...current]); return; }
     let nextPayments = paymentRecords;
     if (firstPayment > 0) {
       const { data: payment, error: paymentError } = await supabase.from('service_charges').insert({
@@ -156,8 +229,9 @@ function App() {
       if (allocationError) { setSaving(false); setToast(`Tenant and payment saved; allocate the property from Tenants: ${allocationError.message}`); setTenants((current) => [tenant, ...current]); return; }
       setPropertyRecords((current) => current.map((property) => property.id === propertyId ? { ...property, status: 'occupied', is_advertised: false } : property));
     }
-    setTenants((current) => [tenant, ...current]);
-    setSaving(false); setModal(false); setToast(propertyId ? 'Tenant, payment and property allocation saved.' : 'Tenant record saved. Record a payment, then allocate a property from Tenants.');
+    setTenants((current) => [{ ...tenant, property_id: propertyId }, ...current]);
+    setSaving(false); setModal(false);
+    await sendTenantPackets(tenant.id);
   }
 
   async function saveOtherRecord(event) {
@@ -248,7 +322,7 @@ function App() {
 
   if (!auth) return <>
     <PublicLanding properties={dashboardAds} onSignIn={() => setAuthModal(true)}/>
-    {authModal && <AuthDialog onSubmit={login} onClose={() => setAuthModal(false)} signing={signing}/>}
+    {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onClose={() => setAuthModal(false)} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </>;
 
@@ -256,7 +330,7 @@ function App() {
     <div className="app-shell">
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
         <div className="brand"><div className="brand-mark">Y<span>.</span></div><div><strong>yemilaz</strong><small>PROPERTIES</small></div><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
-        <div className="workspace-pill"><div className="workspace-avatar">Y</div><span>Yemilaz Properties</span><ChevronDown size={15}/></div>
+        <div className="workspace-pill"><div className="workspace-avatar">{initials(landlordProfile?.business_name || 'Y')}</div><span>{landlordProfile?.business_name || 'Landlord workspace'}</span><ChevronDown size={15}/></div>
         <div className="side-scroll">{nav.map((group) => <div className="nav-group" key={group.title}><span className="nav-label">{group.title}</span>{group.links.map(([label, Icon]) => <button key={label} className={`nav-link ${page === label ? 'selected' : ''}`} onClick={() => { setPage(label); setMenu(false); }}><Icon size={18}/>{label}{label === 'Tenants' && <span className="nav-count">{auth ? tenants.length : demoTenants.length}</span>}</button>)}</div>)}</div>
         <div className="sidebar-bottom"><div className="upgrade-card"><Sparkles size={16}/><b>Property insights</b><p>See what’s happening across your portfolio.</p><button onClick={() => setToast('Insights are coming soon')}>Explore insights <ArrowRight size={14}/></button></div><div className="profile-row"><div className="profile-avatar">{auth ? initials(auth.email || 'YA') : 'YA'}</div><div><b>{auth?.email || 'Yemilaz Admin'}</b><small>{auth ? 'Property manager' : 'Preview workspace'}</small></div>{auth && <button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button>}</div></div>
       </aside>
@@ -264,18 +338,18 @@ function App() {
       <main className="main-area">
         <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenu(true)}><Menu size={19}/></button><div className="breadcrumb">Workspace <span>/</span> <b>{page}</b></div><div className="top-actions"><button className="help-btn" onClick={() => setToast('How can we help? Email hello@yemilazproperties.com')}><CircleHelp size={17}/><span>Help centre</span></button><div className="top-divider"/>{auth ? <button className="profile-avatar top-avatar" title={auth.email}>{initials(auth.email || 'YA')}</button> : <button className="sign-in" onClick={() => setAuthModal(true)}>Sign in</button>}</div></header>
         {page === 'Overview' ? <>
-          <section className="welcome-row"><div><div className="eyebrow">{new Date().toLocaleDateString('en-NG', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()} <span className="live-dot"/></div><h1>Good morning, Yemilaz <span>✳</span></h1><p>Here’s what’s happening with your properties today.</p></div><button className="primary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}><Plus size={17}/> Add a tenant</button></section>
+          <section className="welcome-row"><div><div className="eyebrow">{new Date().toLocaleDateString('en-NG', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()} <span className="live-dot"/></div><h1>Good morning, {landlordProfile?.full_name?.split(' ')[0] || 'Landlord'} <span>✳</span></h1><p>Here’s what’s happening with your properties today.</p></div><button className="primary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}><Plus size={17}/> Add a tenant</button></section>
           <section className="metric-grid"><Metric icon={Building2} label="Total properties" value={auth ? propertyRecords.length : '—'} note="Across your portfolio" color="lavender"/><Metric icon={Users} label="Active tenants" value={auth ? tenants.length : '—'} note="Lease records on file" color="mint"/><Metric icon={Wallet} label="Rent collected" value="—" note="Track recorded payments" color="peach"/><Metric icon={Clock3} label="Expiring soon" value="—" note="Lease dates on file" color="blue"/></section>
           <section className="content-grid"><div className="panel tenants-panel"><div className="panel-heading"><div><span className="eyebrow">YOUR PORTFOLIO</span><h2>Recent tenants <span className="count-badge">{auth ? tenants.length : demoTenants.length}</span></h2></div><button className="text-button" onClick={() => setPage('Tenants')}>View all <ArrowRight size={15}/></button></div><div className="table-tools"><label className="search-box"><Search size={16}/><input placeholder="Search tenants..." value={query} onChange={(event) => setQuery(event.target.value)}/></label><button className="filter-button" onClick={() => setFilter(filter === 'All properties' ? 'Active only' : 'All properties')}><SlidersHorizontal size={15}/>{filter}<ChevronDown size={13}/></button></div><div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>ANNUAL RENT</th></tr></thead><tbody>{(auth ? displayedTenants : demoTenants.map((tenant) => ({ ...tenant, name: tenant.full_name, initials: initials(tenant.full_name), property: tenant.notes, date: dateLabel(tenant.lease_start), rent: currency(tenant.rent_amount), displayStatus: tenant.status === 'active' ? 'Active' : 'Renewal due' })).filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase()))).slice(0, 5).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td></tr>)}</tbody></table>{auth && displayedTenants.length === 0 && <div className="empty-state">No tenant records yet.</div>}</div><div className="panel-footer"><span>{auth ? `Showing ${Math.min(displayedTenants.length, 5)} of ${tenants.length} tenants` : 'Preview data'}</span><button onClick={() => setPage('Tenants')}>Manage tenants <ArrowUpRight size={14}/></button></div></div>
             <div className="right-column"><div className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">THE LATEST</span><h2>Portfolio reminders</h2></div></div><div className="activity-list"><Activity icon={Check} tone="green" title="Properties ready to advertise" text={`${dashboardAds.length} available properties featured`} time="Dashboard listings"/><Activity icon={FileText} tone="purple" title="Payment records" text={`${paymentRecords.length} rent and service records`} time="Payments & charges"/><Activity icon={CalendarDays} tone="orange" title="Tenant allocations" text={`${tenants.filter((tenant) => tenant.property_id).length} properties allocated`} time="Tenant directory"/></div><button className="activity-link" onClick={() => setPage('Payments & charges')}>View payments <ArrowRight size={14}/></button></div><div className="reminder-card"><div className="reminder-icon"><Building2 size={17}/></div><div><span className="eyebrow">AVAILABLE LISTINGS</span><h3>{availableProperties.length} unallocated properties</h3><p>Advertise an available property from Properties.</p></div><ArrowUpRight className="reminder-arrow" size={17}/></div></div>
           </section>
           <section className="listings-section"><div className="listings-heading"><div><span className="eyebrow">AVAILABLE TO RENT OR BUY</span><h2>Dashboard advertisements</h2></div><button className="text-button" onClick={() => setPage('Properties')}>Manage properties <ArrowRight size={15}/></button></div>{dashboardAds.length ? <div className="property-grid">{dashboardAds.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="empty-management"><span><Building2 size={23}/></span><h3>No advertised properties yet</h3><p>Add an available property, then choose “Advertise” in Properties to show it here.</p><button className="secondary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setPage('Properties'); setModal(true); }}><Plus size={15}/> Add a property</button></div>}</section>
-        </> : <ManagementPage
+        </> : page === 'Landlord profile' ? <LandlordProfilePage profile={landlordProfile} email={auth.email} onSave={saveLandlordProfile} saving={saving}/> : <ManagementPage
           page={page} tenants={visibleTenants} records={page === 'Properties' ? propertyRecords : page === 'Payments & charges' ? visiblePayments : records}
           query={query} setQuery={setQuery} openModal={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}
           onDeleteProperty={deleteProperty} onToggleAdvertisement={toggleAdvertisement}
           onAllocate={(tenant) => { if (!auth) { setAuthModal(true); return; } setAllocationTenant(tenant); }}
-          onRecordPayment={() => setPage('Payments & charges')} hasPaid={paidForTenant}
+          onRecordPayment={() => setPage('Payments & charges')} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant} hasPaid={paidForTenant}
         />}
         <footer className="site-footer"><span>© 2026 Yemilaz Properties</span><span>Thoughtful living, beautifully managed.</span></footer>
       </main>
@@ -285,11 +359,19 @@ function App() {
       <div className="modal-heading"><div><span className="eyebrow">PORTFOLIO MANAGEMENT</span><h2>{page === 'Tenants' || page === 'Overview' ? 'Register tenant' : `Add ${page === 'Payments & charges' ? 'payment or charge' : page === 'Properties' ? 'property' : page === 'Guarantors' ? 'guarantor' : page.slice(0, -1).toLowerCase()} record`}</h2><p>Save the details to your private Supabase workspace.</p></div><button type="button" className="icon-button" onClick={() => setModal(false)}><X size={19}/></button></div>
       {(page === 'Tenants' || page === 'Overview') ? <>
         <label>Tenant’s full name<input required name="full_name" placeholder="e.g. Amara Okafor"/></label>
-        <div className="form-row"><label>Email<input name="email" type="email"/></label><label>Phone<input name="phone"/></label></div>
+        <div className="form-row"><label>Tenant email<input required name="email" type="email"/></label><label>Tenant phone<input name="phone"/></label></div>
         <div className="form-row"><label>Lease start<input required name="lease_start" type="date"/></label><label>Lease end<input required name="lease_end" type="date"/></label></div>
         <div className="form-row"><label>Rent amount (₦)<input required name="rent_amount" type="number" min="0" step="0.01"/></label><label>Rent frequency<select name="rent_frequency"><option value="yearly">Yearly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option></select></label></div>
         <div className="form-row"><label>First payment (₦)<input name="initial_payment" type="number" min="0" step="0.01" defaultValue="0"/><small>Enter a paid rent/deposit amount before allocating a property.</small></label><label>Payment type<select name="payment_type"><option value="rent">Rent</option><option value="deposit">Deposit</option></select></label></div>
         <div className="form-row"><label>Payment date<input name="payment_date" type="date"/></label><label>Allocate available property<select name="property_id" defaultValue=""><option value="">Leave unallocated</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select><small>Allocation requires a first payment above zero.</small></label></div>
+        <div className="form-section-title">Guarantor details · required for their copy</div>
+        <label>Guarantor’s full name<input required name="guarantor_name"/></label>
+        <div className="form-row"><label>Guarantor email<input required name="guarantor_email" type="email"/></label><label>Guarantor phone<input name="guarantor_phone"/></label></div>
+        <div className="form-row"><label>Relationship<input name="guarantor_relationship"/></label><label>Occupation<input name="guarantor_occupation"/></label></div>
+        <label>Guarantor address<input name="guarantor_address"/></label>
+        <div className="form-section-title">People to receive their own copy</div>
+        <p className="setup-note">Add the lawyer email in Landlord profile, then select at least one agent or caretaker with an email below.</p>
+        <div className="form-row"><label>Agent<select name="agent_id" defaultValue=""><option value="">No agent</option>{staffRecords.filter((person) => person.role === 'agent' && person.email).map((person) => <option key={person.id} value={person.id}>{person.full_name} · {person.email}</option>)}</select></label><label>Caretaker<select name="caretaker_id" defaultValue=""><option value="">No caretaker</option>{staffRecords.filter((person) => person.role === 'caretaker' && person.email).map((person) => <option key={person.id} value={person.id}>{person.full_name} · {person.email}</option>)}</select></label></div>
         <label>Notes<input name="notes" placeholder="Unit, references or other details"/></label>
       </> : page === 'Properties' ? <>
         <label>Property name<input required name="name" placeholder="e.g. Meridian Residence"/></label>
@@ -329,8 +411,13 @@ function PublicLanding({ properties, onSignIn }) {
   </div>;
 }
 
-function AuthDialog({ onSubmit, onClose, signing }) {
-  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>Manager sign in</h2><p>Sign in to manage properties, tenants and payments.</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div><label>Email address<input required name="email" type="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" placeholder="Your password"/></label><div className="modal-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? 'Signing in…' : 'Sign in'}</button></div></form></div>;
+function AuthDialog({ onSubmit, onSignUp, onClose, signing }) {
+  const [createAccount, setCreateAccount] = useState(false);
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? 'Create landlord profile' : 'Manager sign in'}</h2><p>{createAccount ? 'Create a private workspace for your own properties and tenants.' : 'Sign in to manage your private properties, tenants and payments.'}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>{createAccount && <><label>Your full name<input required name="full_name" autoComplete="name"/></label><label>Business or portfolio name<input name="business_name" placeholder="Your property business"/></label></>}<label>Email address<input required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><button type="button" className="auth-toggle" onClick={() => setCreateAccount((value) => !value)}>{createAccount ? 'Already have an account? Sign in' : 'New landlord? Create your own profile'}</button></form></div>;
+}
+
+function LandlordProfilePage({ profile, email, onSave, saving }) {
+  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">ACCOUNT SETTINGS</div><h1>Landlord profile</h1><p>These details personalize your workspace and each tenancy document packet.</p></div></div><form key={profile?.user_id || 'profile-loading'} className="panel profile-form" onSubmit={onSave}><h2>Business and contacts</h2><p className="management-sub">Your records remain private to this signed-in account. Tenants and staff receive separate copies by email.</p><div className="form-row"><label>Landlord name<input required name="full_name" defaultValue={profile?.full_name || ''}/></label><label>Business name<input required name="business_name" defaultValue={profile?.business_name || ''}/></label></div><div className="form-row"><label>Account email (delivery address)<input value={email || ''} readOnly/></label><label>Business phone<input name="phone" defaultValue={profile?.phone || ''}/></label></div><label>Business address<input name="business_address" defaultValue={profile?.business_address || ''}/></label><h2>Lawyer and document templates</h2><div className="form-row"><label>Lawyer name<input name="lawyer_name" defaultValue={profile?.lawyer_name || ''}/></label><label>Lawyer email<input name="lawyer_email" type="email" defaultValue={profile?.lawyer_email || ''}/><small>When set, the lawyer receives an individual packet.</small></label></div><label>Agreement terms<textarea required name="agreement_terms" rows="5" defaultValue={profile?.agreement_terms || ''}/><small>Starting text only. Have your lawyer review and adapt it to each tenancy and applicable local law.</small></label><label>House rules<textarea required name="house_rules" rows="5" defaultValue={profile?.house_rules || ''}/></label><div className="profile-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save landlord profile'}</button></div></form></section>;
 }
 
 function PropertyCard({ property }) {
@@ -345,7 +432,7 @@ function Activity({ icon: Icon, tone, title, text, time }) {
   return <div className="activity-item"><span className={`activity-icon ${tone}`}><Icon size={15}/></span><div className="activity-copy"><b>{title}</b><span>{text}</span><small>{time}</small></div></div>;
 }
 
-function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onToggleAdvertisement, onAllocate, onRecordPayment, hasPaid }) {
+function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onToggleAdvertisement, onAllocate, onRecordPayment, onSendPacket, sendingTenant, hasPaid }) {
   const copy = {
     Properties: ['Property portfolio', 'Delete properties, manage availability, and choose which available homes appear on the dashboard.'],
     Tenants: ['Tenant directory', 'Register tenants, record payments, and allocate available properties after payment.'],
@@ -373,7 +460,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
   };
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div><h1>{copy[0]}</h1><p>{copy[1]}</p></div><button className="primary-button" onClick={openModal}><Plus size={17}/>{page === 'Tenants' ? 'Register a tenant' : page === 'Properties' ? 'Add a property' : page === 'Payments & charges' ? 'Record a payment' : 'Add a record'}</button></div>
     <div className="panel management-panel"><div className="panel-heading"><div><h2>{page}</h2><span className="management-sub">{page === 'Tenants' ? `${tenants.length} tenant records` : `${records.length} records`}</span></div><button className="filter-button" onClick={onRecordPayment}><Filter size={15}/> Filters <ChevronDown size={13}/></button></div><label className="search-box wide-search"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${page.toLowerCase()}...`}/></label>
-      {page === 'Tenants' ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>RENT</th><th>PAYMENT</th><th>ACTION</th></tr></thead><tbody>{tenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase())).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td><td>{hasPaid(tenant.id) ? 'Payment recorded' : 'No payment'}</td><td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => hasPaid(tenant.id) ? onAllocate(tenant) : onRecordPayment()}>{tenant.property_id ? 'Change property' : hasPaid(tenant.id) ? 'Allocate' : 'Record payment'}</button></div></td></tr>)}</tbody></table>{tenants.length === 0 && <EmptyState title="No tenants yet" text="Register a tenant to start recording leases and payments."/>}</div>
+      {page === 'Tenants' ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>RENT</th><th>PAYMENT</th><th>ACTION</th></tr></thead><tbody>{tenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase())).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td><td>{hasPaid(tenant.id) ? 'Payment recorded' : 'No payment'}</td><td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => hasPaid(tenant.id) ? onAllocate(tenant) : onRecordPayment()}>{tenant.property_id ? 'Change property' : hasPaid(tenant.id) ? 'Allocate' : 'Record payment'}</button><button className="secondary-button compact-button" disabled={sendingTenant === tenant.id} onClick={() => onSendPacket(tenant.id)}>{sendingTenant === tenant.id ? 'Sending…' : 'Send PDFs'}</button></div></td></tr>)}</tbody></table>{tenants.length === 0 && <EmptyState title="No tenants yet" text="Register a tenant to start recording leases and payments."/>}</div>
       : filtered.length ? <div className="table-wrap"><table><thead><tr>{columns.map(([label]) => <th key={label}>{label.toUpperCase()}</th>)}{page === 'Properties' && <th>ACTION</th>}</tr></thead><tbody>{filtered.map((record, index) => <tr key={record.id || index}>{columns.map(([label, key]) => <td key={key}>{value(key, key === 'tenant_name' ? record : record[key])}</td>)}{page === 'Properties' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status !== 'available'} onClick={() => onToggleAdvertisement(record)}>{record.is_advertised ? 'Hide ad' : 'Advertise'}</button><button className="danger-button" title={`Delete ${record.name}`} onClick={() => onDeleteProperty(record)}><Trash2 size={15}/><span>Delete</span></button></div></td>}</tr>)}</tbody></table></div>
       : <EmptyState title={`No ${page.toLowerCase()} yet`} text={page === 'Properties' ? 'Add a property, then choose whether to advertise it on the dashboard.' : page === 'Payments & charges' ? 'Record rent, deposit and service payments here.' : `Add your first ${page.toLowerCase()} record to get started.`} action={openModal}/>}</div>
     </section>;
