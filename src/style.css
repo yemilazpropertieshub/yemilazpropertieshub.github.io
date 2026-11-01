@@ -34,7 +34,8 @@
 .public-footer .brand-lockup>svg{width:32px;height:32px}
 .brand-watermark{position:fixed;inset:0;z-index:5;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));overflow:hidden;opacity:.032;pointer-events:none}
 .brand-watermark>svg{width:min(70%,170px);height:auto;justify-self:center;align-self:center;color:var(--green)}
-.sidebar,.topbar,.main-area,.public-nav,.public-site>main,.public-footer{position:relative;z-index:6}
+.sidebar{position:fixed;z-index:10}
+.topbar,.main-area,.public-nav,.public-site>main,.public-footer{position:relative;z-index:6}
 .brand-preview{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:8px 0 15px;padding:13px;border:1px solid var(--line);border-radius:8px;background:var(--brand-soft)}
 .brand-preview>span{color:var(--muted);font-size:9px;text-align:right}
 .brand-preview .brand-lockup>svg{width:45px;height:45px}
