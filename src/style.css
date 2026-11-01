@@ -14,6 +14,36 @@
 .profile-form{padding:20px;max-width:820px}.profile-form h2{font:600 16px Manrope;margin:22px 0 4px}.profile-form h2:first-child{margin-top:0}.profile-form>label,.profile-form .form-row label{display:flex;flex-direction:column;gap:6px;font-size:10px;font-weight:600;color:#56594f;margin:14px 0}.profile-form input,.profile-form textarea{width:100%;border:1px solid #e8e8e1;border-radius:6px;padding:9px 10px;outline:0;color:#45483f;background:white;font:inherit;font-size:11px}.profile-form input{height:38px}.profile-form textarea{resize:vertical;line-height:1.6}.profile-form input:focus,.profile-form textarea:focus{border-color:#8ba28a}.profile-form label small{font-size:9px;color:#92948a;font-weight:400;line-height:1.45}.profile-actions{display:flex;justify-content:flex-end;border-top:1px solid #efefe9;padding-top:14px;margin-top:18px}.form-section-title{font-size:10px;font-weight:700;color:#5e765e;border-top:1px solid #efefe9;padding-top:13px;margin:14px 0 12px}.auth-footer{margin-top:17px}.auth-toggle{display:block;border:0;background:none;color:#587259;font-size:10px;font-weight:600;margin:14px auto 0;padding:4px}.auth-toggle:hover{text-decoration:underline}
  .photo-controls{position:absolute;right:10px;bottom:10px;display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:20px;background:rgba(30,34,29,.78);color:#fff;font-size:10px}.photo-controls button{width:25px;height:25px;border:0;border-radius:50%;background:#fff;color:#27372a;font-size:19px;line-height:1;display:grid;place-items:center}.property-image{position:relative}
 .location-note{align-self:center;color:#89939a;font-size:9px;line-height:1.5;padding-top:4px}.location-fields{margin-bottom:2px}.location-fields .form-row{align-items:end}
+.brand-site{min-height:100vh;position:relative;--brand-accent:#c3a261;--brand-soft:#e7f1ed}
+.app-shell{position:relative;isolation:isolate;--brand-accent:#c3a261;--brand-soft:#e7f1ed}
+.theme-jade{--green:#17665b;--green-dark:#124e47;--brand-accent:#c3a261;--brand-soft:#e7f1ed}
+.theme-midnight{--green:#31577d;--green-dark:#203d5a;--brand-accent:#c9ae72;--brand-soft:#e9eff6}
+.theme-terracotta{--green:#98543d;--green-dark:#713b2c;--brand-accent:#c8a166;--brand-soft:#f5eae4}
+.theme-plum{--green:#695477;--green-dark:#4a3857;--brand-accent:#b69a69;--brand-soft:#f0eaf3}
+.theme-midnight .primary-button,.theme-terracotta .primary-button,.theme-plum .primary-button{background:var(--green)}
+.theme-midnight .primary-button:hover,.theme-terracotta .primary-button:hover,.theme-plum .primary-button:hover{background:var(--green-dark)}
+.theme-midnight .nav-link.selected,.theme-terracotta .nav-link.selected,.theme-plum .nav-link.selected{background:var(--brand-soft);color:var(--green-dark)}
+.brand-lockup{display:flex;align-items:center;gap:10px;min-width:0;color:var(--green);text-decoration:none}
+.brand-lockup>svg{width:38px;height:38px;flex:none;color:var(--green)}
+.brand-lockup>span{min-width:0}
+.brand-lockup>span>b{display:block;overflow:hidden;color:var(--ink);font:700 14px Manrope,Arial,sans-serif;letter-spacing:-.35px;text-overflow:ellipsis;white-space:nowrap}
+.brand-lockup>span>small{display:block;margin-top:2px;color:var(--brand-accent);font-size:8px;font-weight:700;letter-spacing:2px}
+.workspace-brand{max-width:calc(100% - 28px)}
+.workspace-brand>svg{width:42px;height:42px}
+.public-brand .brand-lockup>svg{width:42px;height:42px}
+.public-footer .brand-lockup>svg{width:32px;height:32px}
+.brand-watermark{position:fixed;inset:0;z-index:5;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));overflow:hidden;opacity:.032;pointer-events:none}
+.brand-watermark>svg{width:min(70%,170px);height:auto;justify-self:center;align-self:center;color:var(--green)}
+.sidebar,.topbar,.main-area,.public-nav,.public-site>main,.public-footer{position:relative;z-index:6}
+.brand-preview{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:8px 0 15px;padding:13px;border:1px solid var(--line);border-radius:8px;background:var(--brand-soft)}
+.brand-preview>span{color:var(--muted);font-size:9px;text-align:right}
+.brand-preview .brand-lockup>svg{width:45px;height:45px}
+.brand-preview .brand-lockup>span>b{max-width:190px}
+.brand-preview .brand-lockup>span>small{color:var(--brand-accent)}
+.profile-form select,.modal select{min-height:38px;border:1px solid #e8e8e1;border-radius:6px;padding:8px 10px;outline:0;color:#45483f;background:#fff;font:inherit;font-size:11px}
+.profile-form select:focus{border-color:var(--green)}
+.breadcrumb{display:flex;align-items:center;gap:9px;min-width:0}.breadcrumb>b:first-child{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.platform-context{margin-left:5px;color:var(--muted);font-size:9px}
+@media(max-width:570px){.brand-watermark{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr))}.brand-watermark>svg{width:min(72%,125px)}.brand-preview{align-items:flex-start;flex-direction:column}.brand-preview>span{text-align:left}.platform-context{display:none}.workspace-brand>svg{width:36px;height:36px}}
 /* Refined global palette: midnight ink, deep jade, warm ivory and quiet brass. */
 :root{--ink:#1d2933;--muted:#75818a;--line:#e5e8e7;--green:#17665b;--green-dark:#124e47;--paper:#fff;--bg:#f6f7f5}
 body,.public-site{background:#f6f7f5;color:#1d2933}.sidebar{background:#fbfcfb;border-color:#e5e8e7}.brand-mark{background:#174f49}.brand-mark span{color:#d6b66d}.nav-link.selected{background:#e7f0ed;color:#17584f}.nav-link.selected svg{color:#17665b}.primary-button{background:#174f49}.primary-button:hover{background:#103f3a}.workspace-pill,.panel,.metric-card{border-color:#e5e8e7}.public-nav,.public-footer{border-color:#e4e8e7}.public-hero h1{color:#1d2933}.public-hero h1 em{color:#17665b}.public-eyebrow{color:#967947}.public-eyebrow i,.live-dot{background:#c3a261}.public-text-button,.text-button,.about-signin{color:#17665b}.public-listings{background:#fff}.property-tag{background:#fbfaf5;color:#68582e}.photo-controls button{color:#174f49}.metric-icon.mint{background:#e7f1ed;color:#17665b}.metric-icon.peach{background:#f5eee2;color:#987544}.modal input:focus,.modal select:focus{border-color:#43887e;box-shadow:0 0 0 3px #17665b12}

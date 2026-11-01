@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 170" role="img" aria-labelledby="title desc">
+  <title id="title">Yemilaz Properties — Keystone arch</title><desc id="desc">An architectural arch and doorway enclosing a Y, in jade and brass.</desc>
+  <g transform="translate(15 9)"><path d="M73 5 137 31v48c0 39-25 65-64 79C34 144 9 118 9 79V31L73 5Z" fill="#fbfaf5" stroke="#174f49" stroke-width="7"/><path d="M39 116V75a34 34 0 0 1 68 0v41" fill="none" stroke="#d0ad63" stroke-width="7" stroke-linecap="round"/><path d="M49 64 73 89l24-25M73 89v31" fill="none" stroke="#174f49" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="105" cy="106" r="4" fill="#d0ad63"/></g>
+  <text x="190" y="83" fill="#1d2933" font-family="Manrope, Arial, sans-serif" font-size="49" font-weight="700" letter-spacing="-2">Yemilaz</text><text x="194" y="119" fill="#947846" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="7">PROPERTIES</text>
+</svg>

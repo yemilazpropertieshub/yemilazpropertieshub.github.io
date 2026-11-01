@@ -37,6 +37,8 @@ alter table public.tenants add column if not exists caretaker_id uuid references
 create table if not exists public.landlord_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null default '', business_name text not null default 'Yemilaz Properties',
+  brand_template text not null default 'jade' check (brand_template in ('jade','midnight','terracotta','plum')),
+  brand_logo text not null default 'horizon' check (brand_logo in ('estate','keystone','monogram','horizon','doorway')),
   phone text, business_address text, lawyer_name text, lawyer_email text,
   agreement_terms text not null default 'The tenant agrees to pay rent and charges by the agreed due dates, keep the premises reasonably clean, promptly report damage, and return all keys at the end of the tenancy. Any deposit deductions must be itemized.',
   house_rules text not null default 'Use the premises for residential purposes only. Keep shared areas clear and clean. Avoid excessive noise, especially at night. Do not make structural changes without written permission. Report maintenance issues promptly. Follow applicable safety, waste, and community rules.',
@@ -76,9 +78,11 @@ grant select, insert on public.tenant_packet_deliveries to authenticated;
 create or replace function public.create_landlord_profile()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
-  insert into public.landlord_profiles (user_id, full_name, business_name)
+  insert into public.landlord_profiles (user_id, full_name, business_name, brand_template, brand_logo)
   values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''),
-    coalesce(nullif(new.raw_user_meta_data->>'business_name', ''), 'Yemilaz Properties'))
+    coalesce(nullif(new.raw_user_meta_data->>'business_name', ''), 'Yemilaz Properties'),
+    case when new.raw_user_meta_data->>'brand_template' in ('jade','midnight','terracotta','plum') then new.raw_user_meta_data->>'brand_template' else 'jade' end,
+    case when new.raw_user_meta_data->>'brand_logo' in ('estate','keystone','monogram','horizon','doorway') then new.raw_user_meta_data->>'brand_logo' else 'horizon' end)
   on conflict (user_id) do nothing;
   return new;
 end;
@@ -86,9 +90,11 @@ $$;
 drop trigger if exists on_auth_user_created_landlord_profile on auth.users;
 create trigger on_auth_user_created_landlord_profile after insert on auth.users
   for each row execute function public.create_landlord_profile();
-insert into public.landlord_profiles (user_id, full_name, business_name)
+insert into public.landlord_profiles (user_id, full_name, business_name, brand_template, brand_logo)
 select id, coalesce(raw_user_meta_data->>'full_name', ''),
-  coalesce(nullif(raw_user_meta_data->>'business_name', ''), 'Yemilaz Properties')
+  coalesce(nullif(raw_user_meta_data->>'business_name', ''), 'Yemilaz Properties'),
+  coalesce(nullif(raw_user_meta_data->>'brand_template', ''), 'jade'),
+  coalesce(nullif(raw_user_meta_data->>'brand_logo', ''), 'horizon')
 from auth.users on conflict (user_id) do nothing;
 drop policy if exists "Public can view advertised available properties" on public.properties;
 create policy "Public can view advertised available properties" on public.properties

@@ -19,12 +19,15 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 2. [`supabase/migrations/20261102_landlord_profiles_and_tenant_packets.sql`](supabase/migrations/20261102_landlord_profiles_and_tenant_packets.sql)
 3. [`supabase/migrations/20261103_property_photos_and_pdf_receipts.sql`](supabase/migrations/20261103_property_photos_and_pdf_receipts.sql)
 4. [`supabase/migrations/20261104_international_property_locations.sql`](supabase/migrations/20261104_international_property_locations.sql)
+5. [`supabase/migrations/20261105_landlord_branding_templates.sql`](supabase/migrations/20261105_landlord_branding_templates.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
 The third migration enables up to five public listing photos per property in the `property-images` bucket and adds the database limit. Each JPG, PNG, or WebP photo may be up to 5 MB.
 
 The fourth migration adds country and state/province fields to property listings. Nigeria and Lagos are selected by default. Country and first-level administrative-area dropdown options are loaded from the CountriesNow dataset; if its service is unavailable, the fields remain editable so listings can still be entered.
+
+The fifth migration adds a per-landlord business name, logo mark, and professional colour template. New landlords choose these while creating an account; existing landlords can change them under **Landlord profile**. The public Yemilaz homepage and favicon use the Horizon Homes mark. Each signed-in workspace displays the landlord’s own brand while retaining Yemilaz Properties as its hosting platform.
 
 Landlords can create accounts from the website sign-in dialog. Every landlord’s profile and records are scoped to their own Supabase user ID using row-level security. The account email is used for that landlord’s packet copy.
 
@@ -54,5 +57,5 @@ The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_K
 1. Install Node.js 20 or newer.
 2. Run `npm install` and then `npm run dev`.
 3. Copy `.env.example` to `.env.local` and set Supabase URL, publishable/anon key, and document API URL.
-4. Run `supabase/schema.sql` for a new Supabase project, or run all three migrations above for the existing project.
+4. Run `supabase/schema.sql` for a new Supabase project, or run all five migrations above for the existing project.
 5. For the Node mail service, run `npm install` inside `server`, copy `server/.env.example` to `server/.env`, fill in its values, and run `npm start`.

@@ -92,7 +92,7 @@ export function createPdf({ tenant, landlord, property, guarantor, charges, reci
       'This packet is a record and draft template. It is not legal advice or a substitute for a locally reviewed tenancy agreement. The landlord and parties should have the document checked by a qualified lawyer before signing.',
     ]],
   ];
-  const lines = [`YEMILAZ PROPERTIES  |  TENANCY DOCUMENT COPY`, `COPY FOR ${recipient.role.toUpperCase()} - ${recipient.name || recipient.email}`, `Generated ${new Date().toISOString().slice(0, 10)}`, ''];
+  const lines = [`${ascii(landlord.business_name || 'YEMILAZ PROPERTIES').toUpperCase()}  |  TENANCY DOCUMENT COPY`, `COPY FOR ${recipient.role.toUpperCase()} - ${recipient.name || recipient.email}`, `Generated ${new Date().toISOString().slice(0, 10)}`, ''];
   for (const [heading, paragraphs] of rawSections) {
     lines.push(heading);
     for (const paragraph of paragraphs) lines.push(...wrap(paragraph));
@@ -103,7 +103,7 @@ export function createPdf({ tenant, landlord, property, guarantor, charges, reci
 
 export function createPaymentReceiptPdf({ charge, tenant, landlord, property }) {
   const lines = [
-    'YEMILAZ PROPERTIES  |  PAYMENT RECEIPT',
+    `${ascii(landlord.business_name || 'YEMILAZ PROPERTIES').toUpperCase()}  |  PAYMENT RECEIPT`,
     `RECEIPT ${String(charge.id || '').slice(0, 8).toUpperCase()}`,
     `Issued: ${new Date().toISOString().slice(0, 10)}`,
     '',

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 170" role="img" aria-labelledby="title desc">
+  <title id="title">Yemilaz Properties — Open doorway</title><desc id="desc">A welcoming open doorway with a gold key detail, representing access to a place to call home.</desc>
+  <g transform="translate(12 12)"><rect width="146" height="146" rx="30" fill="#fbfaf5" stroke="#e5ddc8" stroke-width="2"/><path d="M37 127V62a36 36 0 0 1 72 0v65" fill="#174f49"/><path d="M51 127V64a22 22 0 0 1 44 0v63" fill="#fbfaf5"/><path d="M57 52 75 70l18-18M75 70v28" fill="none" stroke="#d0ad63" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="88" cy="106" r="3.5" fill="#174f49"/><path d="M24 127h98" stroke="#174f49" stroke-width="7" stroke-linecap="round"/></g>
+  <text x="190" y="83" fill="#1d2933" font-family="Manrope, Arial, sans-serif" font-size="49" font-weight="700" letter-spacing="-2">Yemilaz</text><text x="194" y="119" fill="#947846" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="7">PROPERTIES</text>
+</svg>

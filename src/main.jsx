@@ -15,6 +15,38 @@ const supabase = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPAB
 const currency = (value) => `₦${Number(value || 0).toLocaleString('en-NG')}`;
 const dateLabel = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-NG', { month: 'short', day: '2-digit', year: 'numeric' }) : '—';
 const initials = (name = '') => name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase();
+const brandName = (value = 'Yemilaz Properties') => String(value).trim() || 'Yemilaz Properties';
+
+function BrandSymbol({ logo = 'horizon', className = '' }) {
+  return <svg className={className} viewBox="0 0 146 146" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="1" width="144" height="144" rx="30" fill="var(--brand-soft,#e8f0ed)" stroke="none"/>
+    {logo === 'estate' && <><path d="M22 66 73 24l51 42" stroke="var(--brand-accent,#d0ad63)"/><path d="m48 65 25 26 25-26M73 91v35" strokeWidth="9"/></>}
+    {logo === 'keystone' && <><path d="M20 126V72a53 53 0 0 1 106 0v54"/><path d="m49 68 24 25 24-25M73 93v33" stroke="var(--brand-accent,#d0ad63)" strokeWidth="7"/></>}
+    {logo === 'monogram' && <><circle cx="73" cy="73" r="57"/><text x="73" y="94" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="Manrope,Arial,sans-serif" fontSize="48" fontWeight="700">YP</text><circle cx="119" cy="27" r="6" fill="var(--brand-accent,#d0ad63)" stroke="none"/></>}
+    {logo === 'horizon' && <><path d="M22 111h102M31 107V73l27-22 27 22v34M58 51V35l20-16 20 16v91M85 107V75l24-20 22 20v32"/><path d="m48 80 10 10 11-10M58 90v17" stroke="var(--brand-accent,#d0ad63)" strokeWidth="5"/><circle cx="112" cy="36" r="7" fill="var(--brand-accent,#d0ad63)" stroke="none"/></>}
+    {logo === 'doorway' && <><path d="M34 126V63a39 39 0 0 1 78 0v63" strokeWidth="10"/><path d="M52 126V65a21 21 0 0 1 42 0v61" stroke="var(--brand-accent,#d0ad63)"/><circle cx="84" cy="101" r="4" fill="currentColor" stroke="none"/></>}
+  </svg>;
+}
+
+function BrandLockup({ name, logo = 'horizon', className = '' }) {
+  return <div className={`brand-lockup ${className}`}><BrandSymbol logo={logo}/><span><b>{brandName(name)}</b><small>PROPERTY MANAGEMENT</small></span></div>;
+}
+
+function BrandWatermark({ logo = 'horizon' }) {
+  return <div className="brand-watermark" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <BrandSymbol key={index} logo={logo}/>)}</div>;
+}
+
+function BrandingFields({ profile, defaultBusinessName = 'Yemilaz Properties' }) {
+  const [name, setName] = useState(profile?.business_name ?? defaultBusinessName);
+  const [template, setTemplate] = useState(profile?.brand_template || 'jade');
+  const [logo, setLogo] = useState(profile?.brand_logo || 'horizon');
+  return <><div className="form-section-title">Your website identity</div>
+    <label>Business / website name<input required name="business_name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Adeola Homes"/></label>
+    <div className="form-row"><label>Professional colour template<select name="brand_template" value={template} onChange={(event) => setTemplate(event.target.value)}><option value="jade">Jade &amp; brass</option><option value="midnight">Midnight coast</option><option value="terracotta">Heritage clay</option><option value="plum">Orchid &amp; slate</option></select></label>
+      <label>Choose a logo mark<select name="brand_logo" value={logo} onChange={(event) => setLogo(event.target.value)}><option value="horizon">Horizon homes</option><option value="estate">Estate monogram</option><option value="keystone">Keystone arch</option><option value="monogram">YP monogram</option><option value="doorway">Open doorway</option></select></label></div>
+    <div className={`brand-preview theme-${template}`}><BrandLockup name={name || 'Your property brand'} logo={logo}/><span>Shared platform · Yemilaz Properties</span></div>
+  </>;
+}
 
 const demoTenants = [
   { id: 'demo-1', full_name: 'Amara Okafor', notes: 'Meridian Residence · 4B', lease_start: '2025-01-15', status: 'active', rent_amount: 18500000 },
@@ -47,6 +79,12 @@ function App() {
   const [sendingTenant, setSendingTenant] = useState(null);
   const [downloadingTenant, setDownloadingTenant] = useState(null);
   const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    document.title = auth
+      ? `${landlordProfile?.business_name || 'Yemilaz Properties'} · Yemilaz Properties`
+      : 'Yemilaz Properties | Find your place';
+  }, [auth, landlordProfile]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -101,7 +139,7 @@ function App() {
     const form = new FormData(event.currentTarget);
     const { error } = await supabase.auth.signUp({
       email: form.get('email'), password: form.get('password'),
-      options: { data: { full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties' } },
+      options: { data: { full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon' } },
     });
     setSigning(false);
     if (error) setToast(error.message);
@@ -114,6 +152,7 @@ function App() {
     const form = new FormData(event.currentTarget);
     const profile = {
       user_id: auth.id, full_name: form.get('full_name'), business_name: form.get('business_name'),
+      brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon',
       phone: form.get('phone') || null, business_address: form.get('business_address') || null,
       lawyer_name: form.get('lawyer_name') || null, lawyer_email: form.get('lawyer_email') || null,
       agreement_terms: form.get('agreement_terms'), house_rules: form.get('house_rules'), updated_at: new Date().toISOString(),
@@ -364,23 +403,24 @@ function App() {
   const displayedTenants = visibleTenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase()));
   const dashboardAds = propertyRecords.filter((property) => property.status === 'available' && property.is_advertised);
 
-  if (!auth) return <>
+  if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/>
     <PublicLanding properties={dashboardAds} onSignIn={() => setAuthModal(true)}/>
     {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onClose={() => setAuthModal(false)} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
-  </>;
+  </div>;
 
   return <>
-    <div className="app-shell">
+    <div className={`app-shell theme-${landlordProfile?.brand_template || 'jade'}`}>
+      <BrandWatermark logo={landlordProfile?.brand_logo || 'horizon'}/>
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
-        <div className="brand"><div className="brand-mark">Y<span>.</span></div><div><strong>yemilaz</strong><small>PROPERTIES</small></div><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
+        <div className="brand"><BrandLockup name={landlordProfile?.business_name || 'Yemilaz Properties'} logo={landlordProfile?.brand_logo || 'horizon'} className="workspace-brand"/><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
         <div className="workspace-pill"><div className="workspace-avatar">{initials(landlordProfile?.business_name || 'Y')}</div><span>{landlordProfile?.business_name || 'Landlord workspace'}</span><ChevronDown size={15}/></div>
         <div className="side-scroll">{nav.map((group) => <div className="nav-group" key={group.title}><span className="nav-label">{group.title}</span>{group.links.map(([label, Icon]) => <button key={label} className={`nav-link ${page === label ? 'selected' : ''}`} onClick={() => { setPage(label); setMenu(false); }}><Icon size={18}/>{label}{label === 'Tenants' && <span className="nav-count">{auth ? tenants.length : demoTenants.length}</span>}</button>)}</div>)}</div>
         <div className="sidebar-bottom"><div className="upgrade-card"><Sparkles size={16}/><b>Property insights</b><p>See what’s happening across your portfolio.</p><button onClick={() => setToast('Insights are coming soon')}>Explore insights <ArrowRight size={14}/></button></div><div className="profile-row"><div className="profile-avatar">{auth ? initials(auth.email || 'YA') : 'YA'}</div><div><b>{auth?.email || 'Yemilaz Admin'}</b><small>{auth ? 'Property manager' : 'Preview workspace'}</small></div>{auth && <button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button>}</div></div>
       </aside>
 
       <main className="main-area">
-        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenu(true)}><Menu size={19}/></button><div className="breadcrumb">Workspace <span>/</span> <b>{page}</b></div><div className="top-actions"><button className="help-btn" onClick={() => setToast('How can we help? Email hello@yemilazproperties.com')}><CircleHelp size={17}/><span>Help centre</span></button><div className="top-divider"/>{auth ? <button className="profile-avatar top-avatar" title={auth.email}>{initials(auth.email || 'YA')}</button> : <button className="sign-in" onClick={() => setAuthModal(true)}>Sign in</button>}</div></header>
+        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenu(true)}><Menu size={19}/></button><div className="breadcrumb"><b>{landlordProfile?.business_name || 'Yemilaz Properties'}</b><span>/</span><b>{page}</b><small className="platform-context">Yemilaz Properties workspace</small></div><div className="top-actions"><button className="help-btn" onClick={() => setToast('How can we help? Email hello@yemilazproperties.com')}><CircleHelp size={17}/><span>Help centre</span></button><div className="top-divider"/>{auth ? <button className="profile-avatar top-avatar" title={auth.email}>{initials(auth.email || 'YA')}</button> : <button className="sign-in" onClick={() => setAuthModal(true)}>Sign in</button>}</div></header>
         {page === 'Overview' ? <>
           <section className="welcome-row"><div><div className="eyebrow">{new Date().toLocaleDateString('en-NG', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()} <span className="live-dot"/></div><h1>Good morning, {landlordProfile?.full_name?.split(' ')[0] || 'Landlord'} <span>✳</span></h1><p>Here’s what’s happening with your properties today.</p></div><button className="primary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}><Plus size={17}/> Add a tenant</button></section>
           <section className="metric-grid"><Metric icon={Building2} label="Total properties" value={auth ? propertyRecords.length : '—'} note="Across your portfolio" color="lavender"/><Metric icon={Users} label="Active tenants" value={auth ? tenants.length : '—'} note="Lease records on file" color="mint"/><Metric icon={Wallet} label="Rent collected" value="—" note="Track recorded payments" color="peach"/><Metric icon={Clock3} label="Expiring soon" value="—" note="Lease dates on file" color="blue"/></section>
@@ -396,7 +436,7 @@ function App() {
           onRecordPayment={() => setPage('Payments & charges')} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant}
           onDownloadPdfs={downloadTenantPdfs} downloadingTenant={downloadingTenant} hasPaid={paidForTenant}
         />}
-        <footer className="site-footer"><span>© 2026 Yemilaz Properties</span><span>Thoughtful living, beautifully managed.</span></footer>
+        <footer className="site-footer"><span>© {new Date().getFullYear()} {landlordProfile?.business_name || 'Yemilaz Properties'}</span><span>A private property workspace on Yemilaz Properties.</span></footer>
       </main>
     </div>
 
@@ -447,23 +487,23 @@ function App() {
 
 function PublicLanding({ properties, onSignIn }) {
   return <div className="public-site">
-    <header className="public-nav"><a className="public-brand" href="#top"><span className="brand-mark">Y<span>.</span></span><span><b>yemilaz</b><small>PROPERTIES</small></span></a><nav><a href="#homes">Find a home</a><a href="#about">About us</a><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
+    <header className="public-nav"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><nav><a href="#homes">Find a home</a><a href="#about">About us</a><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
     <main id="top">
       <section className="public-hero"><div className="public-hero-copy"><span className="public-eyebrow"><i/> THOUGHTFUL LIVING IN NIGERIA &amp; BEYOND</span><h1>Find a place<br/>to <em>call yours.</em></h1><p>Considered homes and dependable property care, in Nigeria and around the world.</p><div className="public-hero-actions"><a className="primary-button" href="#homes">Explore available homes <ArrowRight size={16}/></a><button className="public-text-button" onClick={onSignIn}>Property manager? Sign in</button></div><div className="public-trust"><span><Check size={14}/> Carefully selected homes</span><span><Check size={14}/> Personal service</span></div></div><div className="public-hero-photo"><img src="/lagos-home.png" alt="A contemporary home in Lagos"/><div className="hero-photo-note"><span className="live-dot"/> YEMILAZ PROPERTIES <b>Homes for a better everyday.</b></div></div></section>
       <section className="public-listings" id="homes"><div className="public-section-heading"><div><span className="public-eyebrow">THE CURRENT COLLECTION</span><h2>Homes worth coming home to.</h2><p>Browse properties currently available to rent or buy.</p></div><span className="public-count">{properties.length} {properties.length === 1 ? 'home' : 'homes'} available</span></div>{properties.length ? <div className="property-grid">{properties.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="public-empty"><Building2 size={25}/><h3>New homes are on the way.</h3><p>Check back soon for available Yemilaz Properties listings.</p></div>}</section>
       <section className="public-about" id="about"><div><span className="public-eyebrow">PROPERTY, MADE PERSONAL</span><h2>Good homes.<br/>Thoughtful care.</h2></div><p>From discovering your next home to keeping every detail in order, Yemilaz Properties brings people and places together with clarity, care and local expertise.</p><button className="about-signin" onClick={onSignIn}>Property manager sign in <ArrowUpRight size={15}/></button></section>
     </main>
-    <footer className="public-footer"><a className="public-brand" href="#top"><span className="brand-mark">Y<span>.</span></span><span><b>yemilaz</b><small>PROPERTIES</small></span></a><span>Thoughtful living, beautifully managed.</span><span>© {new Date().getFullYear()} Yemilaz Properties</span></footer>
+    <footer className="public-footer"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><span>Thoughtful living, beautifully managed.</span><span>© {new Date().getFullYear()} Yemilaz Properties</span></footer>
   </div>;
 }
 
 function AuthDialog({ onSubmit, onSignUp, onClose, signing }) {
   const [createAccount, setCreateAccount] = useState(false);
-  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? 'Create landlord profile' : 'Manager sign in'}</h2><p>{createAccount ? 'Create a private workspace for your own properties and tenants.' : 'Sign in to manage your private properties, tenants and payments.'}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>{createAccount && <><label>Your full name<input required name="full_name" autoComplete="name"/></label><label>Business or portfolio name<input name="business_name" placeholder="Your property business"/></label></>}<label>Email address<input required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><button type="button" className="auth-toggle" onClick={() => setCreateAccount((value) => !value)}>{createAccount ? 'Already have an account? Sign in' : 'New landlord? Create your own profile'}</button></form></div>;
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? 'Create landlord profile' : 'Manager sign in'}</h2><p>{createAccount ? 'Create a private workspace for your own properties and tenants.' : 'Sign in to manage your private properties, tenants and payments.'}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>{createAccount && <><label>Your full name<input required name="full_name" autoComplete="name"/></label><BrandingFields defaultBusinessName=""/></>}<label>Email address<input required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><button type="button" className="auth-toggle" onClick={() => setCreateAccount((value) => !value)}>{createAccount ? 'Already have an account? Sign in' : 'New landlord? Create your own profile'}</button></form></div>;
 }
 
 function LandlordProfilePage({ profile, email, onSave, saving }) {
-  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">ACCOUNT SETTINGS</div><h1>Landlord profile</h1><p>These details personalize your workspace and each tenancy document packet.</p></div></div><form key={profile?.user_id || 'profile-loading'} className="panel profile-form" onSubmit={onSave}><h2>Business and contacts</h2><p className="management-sub">Your records remain private to this signed-in account. Tenants and staff receive separate copies by email.</p><div className="form-row"><label>Landlord name<input required name="full_name" defaultValue={profile?.full_name || ''}/></label><label>Business name<input required name="business_name" defaultValue={profile?.business_name || ''}/></label></div><div className="form-row"><label>Account email (delivery address)<input value={email || ''} readOnly/></label><label>Business phone<input name="phone" defaultValue={profile?.phone || ''}/></label></div><label>Business address<input name="business_address" defaultValue={profile?.business_address || ''}/></label><h2>Lawyer and document templates</h2><div className="form-row"><label>Lawyer name<input name="lawyer_name" defaultValue={profile?.lawyer_name || ''}/></label><label>Lawyer email<input name="lawyer_email" type="email" defaultValue={profile?.lawyer_email || ''}/><small>When set, the lawyer receives an individual packet.</small></label></div><label>Agreement terms<textarea required name="agreement_terms" rows="5" defaultValue={profile?.agreement_terms || ''}/><small>Starting text only. Have your lawyer review and adapt it to each tenancy and applicable local law.</small></label><label>House rules<textarea required name="house_rules" rows="5" defaultValue={profile?.house_rules || ''}/></label><div className="profile-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save landlord profile'}</button></div></form></section>;
+  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">ACCOUNT SETTINGS</div><h1>Landlord profile</h1><p>Personalize the name, logo, colours and documents for your private workspace.</p></div></div><form key={`${profile?.user_id || 'profile-loading'}-${profile?.updated_at || ''}`} className="panel profile-form" onSubmit={onSave}><h2>Business and contacts</h2><p className="management-sub">Your records remain private to this signed-in account. Tenants and staff receive separate copies by email.</p><div className="form-row"><label>Landlord name<input required name="full_name" defaultValue={profile?.full_name || ''}/></label><label>Account email (delivery address)<input value={email || ''} readOnly/></label></div><div className="form-row"><label>Business phone<input name="phone" defaultValue={profile?.phone || ''}/></label><label>Business address<input name="business_address" defaultValue={profile?.business_address || ''}/></label></div><BrandingFields profile={profile}/><h2>Lawyer and document templates</h2><div className="form-row"><label>Lawyer name<input name="lawyer_name" defaultValue={profile?.lawyer_name || ''}/></label><label>Lawyer email<input name="lawyer_email" type="email" defaultValue={profile?.lawyer_email || ''}/><small>When set, the lawyer receives an individual packet.</small></label></div><label>Agreement terms<textarea required name="agreement_terms" rows="5" defaultValue={profile?.agreement_terms || ''}/><small>Starting text only. Have your lawyer review and adapt it to each tenancy and applicable local law.</small></label><label>House rules<textarea required name="house_rules" rows="5" defaultValue={profile?.house_rules || ''}/></label><div className="profile-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save landlord profile'}</button></div></form></section>;
 }
 
 function LocationFields() {
