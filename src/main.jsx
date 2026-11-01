@@ -74,6 +74,8 @@ function App() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All properties');
   const [auth, setAuth] = useState(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [authNotice, setAuthNotice] = useState(null);
   const [signing, setSigning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingTenant, setSendingTenant] = useState(null);
@@ -89,8 +91,34 @@ function App() {
   useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
+    const currentUrl = new URL(window.location.href);
+    const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
+    const authError = hashParams.get('error_code') || hashParams.get('error');
+    if (authError) {
+      const expired = authError === 'otp_expired' || /expired|invalid/i.test(hashParams.get('error_description') || '');
+      setAuthNotice({ kind: 'error', expired, message: expired ? 'This confirmation link has expired. Request a fresh Yemilaz Properties confirmation email below.' : 'We could not confirm this link. Check that it is complete, then request a fresh confirmation email.' });
+      window.history.replaceState({}, document.title, `${currentUrl.pathname}${currentUrl.search}`);
+    }
+    const confirmationHash = currentUrl.searchParams.get('token_hash');
+    if (currentUrl.searchParams.get('auth') === 'confirm' && confirmationHash) {
+      supabase.auth.verifyOtp({ token_hash: confirmationHash, type: 'email' }).then(({ error }) => {
+        if (!active) return;
+        window.history.replaceState({}, document.title, currentUrl.pathname);
+        setAuthNotice(error
+          ? { kind: 'error', expired: true, message: 'This Yemilaz Properties confirmation link has expired or was already used. Request a fresh email below.' }
+          : { kind: 'success', message: 'Your Yemilaz Properties landlord profile is confirmed. Welcome to your workspace.' });
+      });
+    }
     supabase.auth.getSession().then(({ data }) => { if (active) setAuth(data.session?.user || null); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setAuth(session?.user || null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setAuth(session?.user || null);
+      if (session?.user) supabase.rpc('is_platform_admin').then(({ data }) => setIsPlatformAdmin(data === true));
+      else setIsPlatformAdmin(false);
+      if (event === 'SIGNED_IN' && new URLSearchParams(window.location.search).get('auth') === 'confirmed') {
+        setAuthNotice({ kind: 'success', message: 'Your Yemilaz Properties profile is confirmed. Welcome to your workspace.' });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    });
     return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
@@ -134,16 +162,38 @@ function App() {
 
   async function registerLandlord(event) {
     event.preventDefault();
-    if (!supabase) { setToast('Supabase is not configured for this deployment.'); return; }
+    if (!supabase) { setToast('Yemilaz Properties sign-up is temporarily unavailable. Please try again later.'); return; }
     setSigning(true);
     const form = new FormData(event.currentTarget);
+    const inviteCode = String(form.get('invite_code') || '').trim().toLowerCase();
+    const { data: validInvite, error: inviteError } = await supabase.rpc('validate_landlord_invite', { p_invite_code: inviteCode });
+    if (inviteError || !validInvite) {
+      setSigning(false);
+      setToast('That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.');
+      return;
+    }
     const { error } = await supabase.auth.signUp({
       email: form.get('email'), password: form.get('password'),
-      options: { data: { full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon' } },
+      options: {
+        emailRedirectTo: `${window.location.origin}${window.location.pathname}?auth=confirmed`,
+        data: { full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon', invite_code: inviteCode },
+      },
     });
     setSigning(false);
-    if (error) setToast(error.message);
-    else { setAuthModal(false); setToast('Landlord account created. Check your email if Supabase asks you to confirm it.'); }
+    if (error) setToast(/invite|invitation|access code/i.test(error.message) ? 'That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.' : 'We could not create this Yemilaz Properties account. Check the details and try again.');
+    else { setAuthModal(false); setAuthNotice({ kind: 'pending', message: 'We have sent a confirmation email from Yemilaz Properties. Confirm your email to activate your landlord profile.' }); }
+  }
+
+  async function resendConfirmation(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get('email') || '').trim();
+    if (!supabase || !email) return;
+    setSigning(true);
+    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}?auth=confirmed` } });
+    setSigning(false);
+    if (error) setToast('We could not resend the Yemilaz Properties confirmation email. Check the address or try again later.');
+    else setAuthNotice({ kind: 'pending', message: 'A new confirmation email has been requested from Yemilaz Properties. Use the newest message in your inbox.' });
   }
 
   async function saveLandlordProfile(event) {
@@ -231,13 +281,13 @@ function App() {
 
   async function login(event) {
     event.preventDefault();
-    if (!supabase) { setToast('Supabase is not configured for this deployment.'); return; }
+    if (!supabase) { setToast('Yemilaz Properties sign-in is temporarily unavailable. Please try again later.'); return; }
     setSigning(true);
     const form = new FormData(event.currentTarget);
     const { data, error } = await supabase.auth.signInWithPassword({ email: form.get('email'), password: form.get('password') });
     setSigning(false);
-    if (error) setToast(error.message);
-    else { setAuth(data.user); setAuthModal(false); setToast('Signed in securely'); }
+    if (error) setToast('Those Yemilaz Properties sign-in details could not be verified. Check your email and password.');
+    else { setAuth(data.user); setAuthModal(false); setToast('Signed in securely to Yemilaz Properties.'); }
   }
 
   async function addTenant(event) {
@@ -352,7 +402,7 @@ function App() {
     if (page === 'Properties') setPropertyRecords((current) => [data, ...current]);
     if (page === 'Payments & charges') setPaymentRecords((current) => [data, ...current]);
     setRecords((current) => [data, ...current]); setModal(false);
-    setToast(page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to Supabase.');
+    setToast(page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties workspace.');
   }
 
   async function deleteProperty(property) {
@@ -406,6 +456,7 @@ function App() {
   if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/>
     <PublicLanding properties={dashboardAds} onSignIn={() => setAuthModal(true)}/>
     {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onClose={() => setAuthModal(false)} signing={signing}/>}
+    {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
 
@@ -415,7 +466,7 @@ function App() {
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
         <div className="brand"><BrandLockup name={landlordProfile?.business_name || 'Yemilaz Properties'} logo={landlordProfile?.brand_logo || 'horizon'} className="workspace-brand"/><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
         <div className="workspace-pill"><div className="workspace-avatar">{initials(landlordProfile?.business_name || 'Y')}</div><span>{landlordProfile?.business_name || 'Landlord workspace'}</span><ChevronDown size={15}/></div>
-        <div className="side-scroll">{nav.map((group) => <div className="nav-group" key={group.title}><span className="nav-label">{group.title}</span>{group.links.map(([label, Icon]) => <button key={label} className={`nav-link ${page === label ? 'selected' : ''}`} onClick={() => { setPage(label); setMenu(false); }}><Icon size={18}/>{label}{label === 'Tenants' && <span className="nav-count">{auth ? tenants.length : demoTenants.length}</span>}</button>)}</div>)}</div>
+        <div className="side-scroll">{[...nav, ...(isPlatformAdmin ? [{ title: 'Administration', links: [['Landlord access', KeyRound]] }] : [])].map((group) => <div className="nav-group" key={group.title}><span className="nav-label">{group.title}</span>{group.links.map(([label, Icon]) => <button key={label} className={`nav-link ${page === label ? 'selected' : ''}`} onClick={() => { setPage(label); setMenu(false); }}><Icon size={18}/>{label}{label === 'Tenants' && <span className="nav-count">{auth ? tenants.length : demoTenants.length}</span>}</button>)}</div>)}</div>
         <div className="sidebar-bottom"><div className="upgrade-card"><Sparkles size={16}/><b>Property insights</b><p>See what’s happening across your portfolio.</p><button onClick={() => setToast('Insights are coming soon')}>Explore insights <ArrowRight size={14}/></button></div><div className="profile-row"><div className="profile-avatar">{auth ? initials(auth.email || 'YA') : 'YA'}</div><div><b>{auth?.email || 'Yemilaz Admin'}</b><small>{auth ? 'Property manager' : 'Preview workspace'}</small></div>{auth && <button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button>}</div></div>
       </aside>
 
@@ -428,7 +479,7 @@ function App() {
             <div className="right-column"><div className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">THE LATEST</span><h2>Portfolio reminders</h2></div></div><div className="activity-list"><Activity icon={Check} tone="green" title="Properties ready to advertise" text={`${dashboardAds.length} available properties featured`} time="Dashboard listings"/><Activity icon={FileText} tone="purple" title="Payment records" text={`${paymentRecords.length} rent and service records`} time="Payments & charges"/><Activity icon={CalendarDays} tone="orange" title="Tenant allocations" text={`${tenants.filter((tenant) => tenant.property_id).length} properties allocated`} time="Tenant directory"/></div><button className="activity-link" onClick={() => setPage('Payments & charges')}>View payments <ArrowRight size={14}/></button></div><div className="reminder-card"><div className="reminder-icon"><Building2 size={17}/></div><div><span className="eyebrow">AVAILABLE LISTINGS</span><h3>{availableProperties.length} unallocated properties</h3><p>Advertise an available property from Properties.</p></div><ArrowUpRight className="reminder-arrow" size={17}/></div></div>
           </section>
           <section className="listings-section"><div className="listings-heading"><div><span className="eyebrow">AVAILABLE TO RENT OR BUY</span><h2>Dashboard advertisements</h2></div><button className="text-button" onClick={() => setPage('Properties')}>Manage properties <ArrowRight size={15}/></button></div>{dashboardAds.length ? <div className="property-grid">{dashboardAds.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="empty-management"><span><Building2 size={23}/></span><h3>No advertised properties yet</h3><p>Add an available property, then choose “Advertise” in Properties to show it here.</p><button className="secondary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setPage('Properties'); setModal(true); }}><Plus size={15}/> Add a property</button></div>}</section>
-        </> : page === 'Landlord profile' ? <LandlordProfilePage profile={landlordProfile} email={auth.email} onSave={saveLandlordProfile} saving={saving}/> : <ManagementPage
+        </> : page === 'Landlord profile' ? <LandlordProfilePage profile={landlordProfile} email={auth.email} onSave={saveLandlordProfile} saving={saving}/> : page === 'Landlord access' && isPlatformAdmin ? <PlatformAccessPage client={supabase}/> : <ManagementPage
           page={page} tenants={visibleTenants} records={page === 'Properties' ? propertyRecords : page === 'Payments & charges' ? visiblePayments : records}
           query={query} setQuery={setQuery} openModal={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}
           onDeleteProperty={deleteProperty} onToggleAdvertisement={toggleAdvertisement}
@@ -441,7 +492,7 @@ function App() {
     </div>
 
     {modal && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setModal(false)}><form className="modal" onSubmit={page === 'Tenants' || page === 'Overview' ? addTenant : saveOtherRecord}>
-      <div className="modal-heading"><div><span className="eyebrow">PORTFOLIO MANAGEMENT</span><h2>{page === 'Tenants' || page === 'Overview' ? 'Register tenant' : `Add ${page === 'Payments & charges' ? 'payment or charge' : page === 'Properties' ? 'property' : page === 'Guarantors' ? 'guarantor' : page.slice(0, -1).toLowerCase()} record`}</h2><p>Save the details to your private Supabase workspace.</p></div><button type="button" className="icon-button" onClick={() => setModal(false)}><X size={19}/></button></div>
+      <div className="modal-heading"><div><span className="eyebrow">PORTFOLIO MANAGEMENT</span><h2>{page === 'Tenants' || page === 'Overview' ? 'Register tenant' : `Add ${page === 'Payments & charges' ? 'payment or charge' : page === 'Properties' ? 'property' : page === 'Guarantors' ? 'guarantor' : page.slice(0, -1).toLowerCase()} record`}</h2><p>Save the details to your private Yemilaz Properties workspace.</p></div><button type="button" className="icon-button" onClick={() => setModal(false)}><X size={19}/></button></div>
       {(page === 'Tenants' || page === 'Overview') ? <>
         <label>Tenant’s full name<input required name="full_name" placeholder="e.g. Amara Okafor"/></label>
         <div className="form-row"><label>Tenant email<input required name="email" type="email"/></label><label>Tenant phone<input name="phone"/></label></div>
@@ -481,6 +532,7 @@ function App() {
 
     {allocationTenant && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAllocationTenant(null)}><form className="modal" onSubmit={allocateProperty}><div className="modal-heading"><div><span className="eyebrow">PROPERTY ALLOCATION</span><h2>{allocationTenant.property_id ? 'Change tenant property' : 'Allocate a property'}</h2><p>{allocationTenant.full_name} · allocation is available after a rent or deposit payment is recorded.</p></div><button type="button" className="icon-button" onClick={() => setAllocationTenant(null)}><X size={19}/></button></div><label>Available property<select required name="property_id" defaultValue=""><option value="">Select a property</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select></label>{!paidForTenant(allocationTenant.id) && <p className="setup-note">Record a paid rent or deposit under Payments & charges before allocating a property.</p>}<div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setAllocationTenant(null)}>Cancel</button><button className="primary-button" disabled={saving || !paidForTenant(allocationTenant.id)}>Allocate property</button></div></form></div>}
 
+    {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </>;
 }
@@ -499,7 +551,43 @@ function PublicLanding({ properties, onSignIn }) {
 
 function AuthDialog({ onSubmit, onSignUp, onClose, signing }) {
   const [createAccount, setCreateAccount] = useState(false);
-  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? 'Create landlord profile' : 'Manager sign in'}</h2><p>{createAccount ? 'Create a private workspace for your own properties and tenants.' : 'Sign in to manage your private properties, tenants and payments.'}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>{createAccount && <><label>Your full name<input required name="full_name" autoComplete="name"/></label><BrandingFields defaultBusinessName=""/></>}<label>Email address<input required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><button type="button" className="auth-toggle" onClick={() => setCreateAccount((value) => !value)}>{createAccount ? 'Already have an account? Sign in' : 'New landlord? Create your own profile'}</button></form></div>;
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? 'Create landlord profile' : 'Manager sign in'}</h2><p>{createAccount ? 'Create a private workspace for your own properties and tenants.' : 'Sign in to manage your private properties, tenants and payments.'}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>{createAccount && <><label>Your full name<input required name="full_name" autoComplete="name"/></label><BrandingFields defaultBusinessName=""/><label>Yemilaz Properties access code<input required name="invite_code" autoComplete="one-time-code" placeholder="Enter your one-time invitation code"/><small>Ask the platform administrator for a current code. It can be used once and expires automatically.</small></label></>}<label>Email address<input required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><button type="button" className="auth-toggle" onClick={() => setCreateAccount((value) => !value)}>{createAccount ? 'Already have an account? Sign in' : 'New landlord? Create your own profile'}</button></form></div>;
+}
+
+function AuthNoticeDialog({ notice, onClose, onResend, signing }) {
+  return <div className="modal-backdrop auth-notice-backdrop"><section className="modal auth-notice-card"><div className={`auth-notice-icon ${notice.kind}`}>{notice.kind === 'error' ? <X size={24}/> : <Check size={24}/>}</div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{notice.kind === 'error' ? 'Confirmation link expired' : notice.kind === 'success' ? 'Your profile is confirmed' : 'Check your email'}</h2><p>{notice.message}</p>{notice.kind === 'error' && notice.expired && <form onSubmit={onResend}><label>Email address<input required name="email" type="email" autoComplete="email" placeholder="The address used to register"/></label><button className="primary-button" disabled={signing}>{signing ? 'Sending…' : 'Resend confirmation email'}</button></form>}<button type="button" className="secondary-button" onClick={onClose}>{notice.kind === 'success' ? 'Continue to Yemilaz Properties' : 'Close'}</button></section></div>;
+}
+
+function PlatformAccessPage({ client }) {
+  const [hours, setHours] = useState('24');
+  const [invites, setInvites] = useState([]);
+  const [newCode, setNewCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  async function refresh() {
+    const { data, error } = await client.rpc('list_landlord_invites');
+    if (error) setMessage('Could not load access-code history. Check that the invitation security update was applied.');
+    else setInvites(data || []);
+  }
+  useEffect(() => { refresh(); }, []);
+  async function generate(event) {
+    event.preventDefault(); setBusy(true); setMessage(''); setNewCode('');
+    const { data, error } = await client.rpc('generate_landlord_invite', { p_valid_hours: Number(hours) });
+    setBusy(false);
+    if (error) { setMessage('We could not create an access code. Confirm that your Yemilaz Properties administrator account is enabled.'); return; }
+    const generated = Array.isArray(data) ? data[0] : data;
+    setNewCode(generated?.invite_code || '');
+    setMessage('New one-time access code created. Copy it now; it will not be shown again.');
+    refresh();
+  }
+  async function revoke(id) {
+    setBusy(true);
+    const { error } = await client.rpc('revoke_landlord_invite', { p_invite_id: id });
+    setBusy(false);
+    setMessage(error ? 'We could not revoke that code.' : 'Unused access code revoked.');
+    refresh();
+  }
+  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">YEMILAZ PROPERTIES ADMINISTRATION</div><h1>Landlord access</h1><p>Create expiring, single-use codes for approved landlords. Only platform administrators can see this page.</p></div></div><div className="panel invite-panel"><h2>Generate a landlord code</h2><p>Each code works for one landlord registration, expires automatically, and can be revoked before use.</p><form className="invite-create" onSubmit={generate}><label>Code expiry<select value={hours} onChange={(event) => setHours(event.target.value)}><option value="1">1 hour</option><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></label><button className="primary-button" disabled={busy}>Generate secure code</button></form>{newCode && <div className="invite-code-result"><div><small>ONE-TIME LANDLORD CODE</small><code>{newCode}</code></div><button className="secondary-button" onClick={() => navigator.clipboard?.writeText(newCode).then(() => setMessage('Access code copied.'))}>Copy code</button></div>}{message && <p className="setup-note">{message}</p>}</div><div className="panel invite-history"><div className="panel-heading"><div><span className="eyebrow">ACCESS CONTROL</span><h2>Invitation history</h2></div><button className="secondary-button" onClick={refresh}>Refresh</button></div><div className="table-wrap"><table><thead><tr><th>CODE</th><th>STATUS</th><th>EXPIRES</th><th>USED</th><th/></tr></thead><tbody>{invites.map((invite) => <tr key={invite.invite_id}><td><code>{invite.code_hint}</code></td><td><span className={`invite-status ${invite.status}`}>{invite.status}</span></td><td>{new Date(invite.expires_at).toLocaleString()}</td><td>{invite.redeemed_at ? new Date(invite.redeemed_at).toLocaleString() : '—'}</td><td>{invite.status === 'active' && <button className="danger-button" disabled={busy} onClick={() => revoke(invite.invite_id)}>Revoke</button>}</td></tr>)}</tbody></table>{!invites.length && <div className="empty-state">No landlord invitation codes yet.</div>}</div></div></section>;
 }
 
 function LandlordProfilePage({ profile, email, onSave, saving }) {

@@ -20,6 +20,7 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 3. [`supabase/migrations/20261103_property_photos_and_pdf_receipts.sql`](supabase/migrations/20261103_property_photos_and_pdf_receipts.sql)
 4. [`supabase/migrations/20261104_international_property_locations.sql`](supabase/migrations/20261104_international_property_locations.sql)
 5. [`supabase/migrations/20261105_landlord_branding_templates.sql`](supabase/migrations/20261105_landlord_branding_templates.sql)
+6. [`supabase/migrations/20261106_landlord_invitation_security.sql`](supabase/migrations/20261106_landlord_invitation_security.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -28,6 +29,30 @@ The third migration enables up to five public listing photos per property in the
 The fourth migration adds country and state/province fields to property listings. Nigeria and Lagos are selected by default. Country and first-level administrative-area dropdown options are loaded from the CountriesNow dataset; if its service is unavailable, the fields remain editable so listings can still be entered.
 
 The fifth migration adds a per-landlord business name, logo mark, and professional colour template. New landlords choose these while creating an account; existing landlords can change them under **Landlord profile**. The public Yemilaz homepage and favicon use the Horizon Homes mark. Each signed-in workspace displays the landlord’s own brand while retaining Yemilaz Properties as its hosting platform.
+
+The sixth migration makes landlord account creation invitation-only. Each code is single-use, expires after a chosen period (1 hour to 7 days), and can be revoked. The code manager appears only to a platform administrator. After applying the migration, bootstrap the first administrator in SQL Editor by replacing `OWNER_EMAIL_HERE` with the email on the Yemilaz Properties owner account:
+
+```sql
+insert into public.platform_admins (user_id)
+select id from auth.users where lower(email) = lower('OWNER_EMAIL_HERE')
+on conflict (user_id) do nothing;
+```
+
+The administrator then signs in, opens **Landlord access**, and generates codes for landlords. Do not issue a code publicly. Each landlord enters their code once during signup; it becomes unusable as soon as the account is created.
+
+## Brand landlord confirmation email and links
+
+The app sends confirmation links back to the current Yemilaz Properties site and shows a branded success or expired-link screen. Old confirmation messages may still point to `localhost:3000`; discard those and use the new confirmation email after deployment.
+
+In the Supabase project dashboard:
+
+1. Open **Authentication → URL Configuration**. Set **Site URL** to `https://yemilazpropertieshub.github.io`. Add `https://yemilazpropertieshub.github.io/**` to **Redirect URLs**. For local development, also add `http://localhost:5173/**`.
+2. Open **Authentication → Emails → SMTP Settings** and enable custom SMTP. With a verified Resend sending domain, use host `smtp.resend.com`, port `465`, username `resend`, and a Resend API key as the password. Set the sender name to **Yemilaz Properties** and the sender address to an address on the verified domain, such as `tenancy@yemilazproperties.com` only after that domain is verified in Resend.
+3. Open **Authentication → Emails → Templates → Confirm signup**. Use subject `Confirm your Yemilaz Properties account` and paste the HTML from [`supabase/email-templates/confirm-signup.html`](supabase/email-templates/confirm-signup.html) as the message body. The template uses Supabase’s `{{ .ConfirmationURL }}` variable only to produce the secure confirmation link; the email sender and displayed copy are Yemilaz Properties.
+4. Replace the **Reset password** template with [`supabase/email-templates/password-reset.html`](supabase/email-templates/password-reset.html) as well, so password recovery uses the same brand.
+5. Deploy this frontend. Request a new signup confirmation if an earlier email expired. If the expiry screen appears, enter the signup email and use **Resend confirmation email**; use the newest link.
+
+The authentication email sender name, sending domain, template, Site URL, and redirect allowlist are managed in the Supabase project dashboard; they cannot be changed by a frontend code deployment alone. The app’s tenant, guarantor, lawyer, caretaker, and agent document emails use the Yemilaz-branded sender configured in the Node service.
 
 Landlords can create accounts from the website sign-in dialog. Every landlord’s profile and records are scoped to their own Supabase user ID using row-level security. The account email is used for that landlord’s packet copy.
 
@@ -57,5 +82,5 @@ The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_K
 1. Install Node.js 20 or newer.
 2. Run `npm install` and then `npm run dev`.
 3. Copy `.env.example` to `.env.local` and set Supabase URL, publishable/anon key, and document API URL.
-4. Run `supabase/schema.sql` for a new Supabase project, or run all five migrations above for the existing project.
+4. For a new project, run `supabase/schema.sql` and then migration 6 above. For the existing project, run all six migrations above in order. Then bootstrap the platform administrator as described above.
 5. For the Node mail service, run `npm install` inside `server`, copy `server/.env.example` to `server/.env`, fill in its values, and run `npm start`.

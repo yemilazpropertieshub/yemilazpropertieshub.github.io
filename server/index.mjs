@@ -178,8 +178,8 @@ app.post('/api/tenant-packets', async (req, res) => {
           headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: sender, to: [recipient.email],
-            subject: `Confidential tenancy documents for ${tenant.full_name}`,
-            text: `Hello ${recipient.name || 'there'},\n\nAttached is your individual Yemilaz Properties tenancy document packet for ${property?.name || 'the tenancy'}. This copy is addressed to you as ${recipient.role}.\n\nPlease contact the landlord if anything needs correction.`,
+            subject: `${landlord.business_name || 'Yemilaz Properties'} | Your tenancy documents for ${tenant.full_name}`,
+            text: `Hello ${recipient.name || 'there'},\n\n${landlord.business_name || 'Yemilaz Properties'} has prepared your individual tenancy document packet for ${property?.name || 'the tenancy'}. This copy is addressed to you as ${recipient.role}. The attached receipt PDFs list payments recorded as paid.\n\nPlease contact the landlord if anything needs correction.\n\nYemilaz Properties`,
             attachments: [
               { filename: `Yemilaz-${recipient.role}-tenancy-${tenant.id.slice(0, 8)}.pdf`, content: packet.data.toString('base64') },
               ...receiptFiles.map((receipt) => ({ filename: receipt.name.split('/').at(-1), content: receipt.data.toString('base64') })),
@@ -198,7 +198,7 @@ app.post('/api/tenant-packets', async (req, res) => {
     res.json({ deliveries });
   } catch (error) {
     console.error('Tenant packet delivery failed:', error);
-    res.status(500).json({ error: 'Could not prepare the tenant packet. Check the server logs and Supabase setup.' });
+    res.status(500).json({ error: 'Yemilaz Properties could not prepare this document packet. Please try again later or contact your property administrator.' });
   }
 });
 
