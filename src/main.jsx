@@ -61,7 +61,7 @@ function App() {
     let active = true;
     const fields = auth
       ? '*'
-      : 'id,name,address,city,listing_type,price,bedrooms,bathrooms,description,image_url,image_urls,status,is_advertised';
+      : 'id,name,address,city,state,country,listing_type,price,bedrooms,bathrooms,description,image_url,image_urls,status,is_advertised';
     let request = supabase.from('properties').select(fields).order('created_at', { ascending: false });
     request = auth
       ? request.eq('owner_id', auth.id)
@@ -282,7 +282,8 @@ function App() {
       }
       table = 'properties';
       row = {
-        name: form.get('name'), address: form.get('address') || null, city: form.get('city') || 'Lagos',
+        name: form.get('name'), address: form.get('address') || null, city: form.get('city') || null,
+        state: form.get('state') || null, country: form.get('country') || 'Nigeria',
         listing_type: form.get('listing_type'), price: Number(form.get('price')), bedrooms: Number(form.get('bedrooms') || 0),
         bathrooms: Number(form.get('bathrooms') || 0), description: form.get('description') || null,
         image_url: photoUrls[0] || null, image_urls: photoUrls, status: 'available', is_advertised: form.get('is_advertised') === 'on',
@@ -420,7 +421,8 @@ function App() {
       </> : page === 'Properties' ? <>
         <label>Property name<input required name="name" placeholder="e.g. Meridian Residence"/></label>
         <div className="form-row"><label>Listing type<select name="listing_type"><option value="rent">For rent</option><option value="sale">For sale</option></select></label><label>Price (₦)<input required name="price" type="number" min="0"/></label></div>
-        <div className="form-row"><label>Address<input name="address"/></label><label>City<input name="city" defaultValue="Lagos"/></label></div>
+        <label>Street address<input name="address" placeholder="House number and street"/></label>
+        <LocationFields />
         <div className="form-row"><label>Bedrooms<input name="bedrooms" type="number" min="0"/></label><label>Bathrooms<input name="bathrooms" type="number" min="0"/></label></div>
         <label>Property photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple/><small>Upload up to 5 JPG, PNG or WebP photos, maximum 5 MB each. Your first photo appears as the cover image.</small></label><label>Description<textarea name="description" rows="3"/></label>
         <label className="checkbox-row"><input type="checkbox" name="is_advertised" defaultChecked/> Advertise on the dashboard while available</label>
@@ -447,7 +449,7 @@ function PublicLanding({ properties, onSignIn }) {
   return <div className="public-site">
     <header className="public-nav"><a className="public-brand" href="#top"><span className="brand-mark">Y<span>.</span></span><span><b>yemilaz</b><small>PROPERTIES</small></span></a><nav><a href="#homes">Find a home</a><a href="#about">About us</a><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
     <main id="top">
-      <section className="public-hero"><div className="public-hero-copy"><span className="public-eyebrow"><i/> THOUGHTFUL LIVING IN LAGOS</span><h1>Find a place<br/>to <em>call yours.</em></h1><p>Considered homes and dependable property care, brought together by Yemilaz Properties.</p><div className="public-hero-actions"><a className="primary-button" href="#homes">Explore available homes <ArrowRight size={16}/></a><button className="public-text-button" onClick={onSignIn}>Property manager? Sign in</button></div><div className="public-trust"><span><Check size={14}/> Carefully selected homes</span><span><Check size={14}/> Personal service</span></div></div><div className="public-hero-photo"><img src="/lagos-home.png" alt="A contemporary home in Lagos"/><div className="hero-photo-note"><span className="live-dot"/> YEMILAZ PROPERTIES <b>Homes for a better everyday.</b></div></div></section>
+      <section className="public-hero"><div className="public-hero-copy"><span className="public-eyebrow"><i/> THOUGHTFUL LIVING IN NIGERIA &amp; BEYOND</span><h1>Find a place<br/>to <em>call yours.</em></h1><p>Considered homes and dependable property care, in Nigeria and around the world.</p><div className="public-hero-actions"><a className="primary-button" href="#homes">Explore available homes <ArrowRight size={16}/></a><button className="public-text-button" onClick={onSignIn}>Property manager? Sign in</button></div><div className="public-trust"><span><Check size={14}/> Carefully selected homes</span><span><Check size={14}/> Personal service</span></div></div><div className="public-hero-photo"><img src="/lagos-home.png" alt="A contemporary home in Lagos"/><div className="hero-photo-note"><span className="live-dot"/> YEMILAZ PROPERTIES <b>Homes for a better everyday.</b></div></div></section>
       <section className="public-listings" id="homes"><div className="public-section-heading"><div><span className="public-eyebrow">THE CURRENT COLLECTION</span><h2>Homes worth coming home to.</h2><p>Browse properties currently available to rent or buy.</p></div><span className="public-count">{properties.length} {properties.length === 1 ? 'home' : 'homes'} available</span></div>{properties.length ? <div className="property-grid">{properties.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="public-empty"><Building2 size={25}/><h3>New homes are on the way.</h3><p>Check back soon for available Yemilaz Properties listings.</p></div>}</section>
       <section className="public-about" id="about"><div><span className="public-eyebrow">PROPERTY, MADE PERSONAL</span><h2>Good homes.<br/>Thoughtful care.</h2></div><p>From discovering your next home to keeping every detail in order, Yemilaz Properties brings people and places together with clarity, care and local expertise.</p><button className="about-signin" onClick={onSignIn}>Property manager sign in <ArrowUpRight size={15}/></button></section>
     </main>
@@ -464,12 +466,53 @@ function LandlordProfilePage({ profile, email, onSave, saving }) {
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">ACCOUNT SETTINGS</div><h1>Landlord profile</h1><p>These details personalize your workspace and each tenancy document packet.</p></div></div><form key={profile?.user_id || 'profile-loading'} className="panel profile-form" onSubmit={onSave}><h2>Business and contacts</h2><p className="management-sub">Your records remain private to this signed-in account. Tenants and staff receive separate copies by email.</p><div className="form-row"><label>Landlord name<input required name="full_name" defaultValue={profile?.full_name || ''}/></label><label>Business name<input required name="business_name" defaultValue={profile?.business_name || ''}/></label></div><div className="form-row"><label>Account email (delivery address)<input value={email || ''} readOnly/></label><label>Business phone<input name="phone" defaultValue={profile?.phone || ''}/></label></div><label>Business address<input name="business_address" defaultValue={profile?.business_address || ''}/></label><h2>Lawyer and document templates</h2><div className="form-row"><label>Lawyer name<input name="lawyer_name" defaultValue={profile?.lawyer_name || ''}/></label><label>Lawyer email<input name="lawyer_email" type="email" defaultValue={profile?.lawyer_email || ''}/><small>When set, the lawyer receives an individual packet.</small></label></div><label>Agreement terms<textarea required name="agreement_terms" rows="5" defaultValue={profile?.agreement_terms || ''}/><small>Starting text only. Have your lawyer review and adapt it to each tenancy and applicable local law.</small></label><label>House rules<textarea required name="house_rules" rows="5" defaultValue={profile?.house_rules || ''}/></label><div className="profile-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save landlord profile'}</button></div></form></section>;
 }
 
+function LocationFields() {
+  const [countries, setCountries] = useState([{ name: 'Nigeria' }]);
+  const [country, setCountry] = useState('Nigeria');
+  const [city, setCity] = useState('Lagos');
+  const [states, setStates] = useState([]);
+  const [state, setState] = useState('Lagos');
+  const [countriesAvailable, setCountriesAvailable] = useState(false);
+  const [statesAvailable, setStatesAvailable] = useState(false);
+  const [loadingStates, setLoadingStates] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch('https://countriesnow.space/api/v0.1/countries/iso')
+      .then((response) => { if (!response.ok) throw new Error('Could not load countries'); return response.json(); })
+      .then((result) => { if (active && Array.isArray(result.data)) { setCountries(result.data.map((item) => ({ name: item.name })).sort((a, b) => a.name.localeCompare(b.name))); setCountriesAvailable(true); } })
+      .catch(() => { if (active) setCountriesAvailable(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingStates(true); setStatesAvailable(false); setStates([]);
+    fetch('https://countriesnow.space/api/v0.1/countries/states', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ country }),
+    }).then((response) => { if (!response.ok) throw new Error('Could not load regions'); return response.json(); })
+      .then((result) => {
+        if (!active) return;
+        const names = (result.data?.states || []).map((item) => typeof item === 'string' ? item : item.name).filter(Boolean);
+        setStates(names); setStatesAvailable(names.length > 0);
+        if (names.length && !names.includes(state)) setState(country === 'Nigeria' && names.includes('Lagos') ? 'Lagos' : '');
+      }).catch(() => { if (active) setStatesAvailable(false); })
+      .finally(() => { if (active) setLoadingStates(false); });
+    return () => { active = false; };
+  }, [country]);
+
+  return <div className="location-fields"><div className="form-row">
+    <label>Country{countriesAvailable ? <select name="country" value={country} onChange={(event) => { setCountry(event.target.value); setState(''); setCity(''); }} required>{countries.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}</select> : <input name="country" value={country} onChange={(event) => { setCountry(event.target.value); setState(''); setCity(''); }} required/>}</label>
+    <label>State / province{statesAvailable ? <select name="state" value={state} onChange={(event) => setState(event.target.value)} required><option value="">Select a state or province</option>{states.map((item) => <option key={item} value={item}>{item}</option>)}</select> : <input name="state" value={state} onChange={(event) => setState(event.target.value)} placeholder={loadingStates ? 'Loading regions…' : 'Enter state or province'} required/>}</label>
+  </div><div className="form-row"><label>City / town<input name="city" value={city} onChange={(event) => setCity(event.target.value)} placeholder="City or town"/></label><span className="location-note">{loadingStates ? 'Loading states and provinces…' : 'Choose a country to load its states or regions.'}</span></div></div>;
+}
+
 function PropertyCard({ property }) {
   const images = property.image_urls?.length ? property.image_urls : [property.image_url].filter(Boolean);
   const [photoIndex, setPhotoIndex] = useState(0);
   const cover = images[photoIndex] || '/lagos-home.png';
   const changePhoto = (event, direction) => { event.preventDefault(); event.stopPropagation(); setPhotoIndex((current) => (current + direction + images.length) % images.length); };
-  return <article className="property-card"><div className="property-image" style={{ backgroundImage: `url(${cover})` }}><span className="property-tag">{property.listing_type === 'sale' ? 'For sale' : 'For rent'}</span>{images.length > 1 && <div className="photo-controls"><button type="button" aria-label="Previous property photo" onClick={(event) => changePhoto(event, -1)}>‹</button><span>{photoIndex + 1} / {images.length}</span><button type="button" aria-label="Next property photo" onClick={(event) => changePhoto(event, 1)}>›</button></div>}</div><div className="property-info"><span className="property-area">{[property.address, property.city].filter(Boolean).join(', ') || 'Lagos'}</span><h3>{property.name}</h3><div className="property-features"><span><BedDouble size={15}/>{property.bedrooms || 0} beds</span><span><Home size={14}/>{property.bathrooms || 0} baths</span></div><div className="property-price"><b>{currency(property.price)}</b><span>{property.listing_type === 'rent' ? '/ year' : ''}</span><a href={`mailto:hello@yemilazproperties.com?subject=${encodeURIComponent(`Property enquiry: ${property.name}`)}`} aria-label={`Enquire about ${property.name}`}><ArrowUpRight size={16}/></a></div></div></article>;
+  return <article className="property-card"><div className="property-image" style={{ backgroundImage: `url(${cover})` }}><span className="property-tag">{property.listing_type === 'sale' ? 'For sale' : 'For rent'}</span>{images.length > 1 && <div className="photo-controls"><button type="button" aria-label="Previous property photo" onClick={(event) => changePhoto(event, -1)}>‹</button><span>{photoIndex + 1} / {images.length}</span><button type="button" aria-label="Next property photo" onClick={(event) => changePhoto(event, 1)}>›</button></div>}</div><div className="property-info"><span className="property-area">{[property.address, property.city, property.state, property.country].filter(Boolean).join(', ') || 'Nigeria'}</span><h3>{property.name}</h3><div className="property-features"><span><BedDouble size={15}/>{property.bedrooms || 0} beds</span><span><Home size={14}/>{property.bathrooms || 0} baths</span></div><div className="property-price"><b>{currency(property.price)}</b><span>{property.listing_type === 'rent' ? '/ year' : ''}</span><a href={`mailto:hello@yemilazproperties.com?subject=${encodeURIComponent(`Property enquiry: ${property.name}`)}`} aria-label={`Enquire about ${property.name}`}><ArrowUpRight size={16}/></a></div></div></article>;
 }
 
 function Metric({ icon: Icon, label, value, note, color }) {
@@ -490,7 +533,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
     Agents: ['Agent directory', 'Your trusted partners for letting and sales.'],
   }[page] || ['Portfolio overview', 'Your properties at a glance.'];
   const columns = {
-    Properties: [['Property', 'name'], ['City', 'city'], ['Listing', 'listing_type'], ['Price', 'price'], ['Availability', 'status']],
+    Properties: [['Property', 'name'], ['City', 'city'], ['State / province', 'state'], ['Country', 'country'], ['Listing', 'listing_type'], ['Price', 'price'], ['Availability', 'status']],
     'Payments & charges': [['Description', 'description'], ['Tenant', 'tenant_name'], ['Category', 'category'], ['Amount', 'amount'], ['Due date', 'due_date'], ['Status', 'status']],
     Guarantors: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Relationship', 'relationship']],
     Caretakers: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],

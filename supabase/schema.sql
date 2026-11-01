@@ -2,7 +2,7 @@
 create extension if not exists pgcrypto;
 create table if not exists public.properties (
   id uuid primary key default gen_random_uuid(), owner_id uuid not null references auth.users(id) on delete cascade,
-  name text not null, address text, city text default 'Lagos', listing_type text not null default 'rent' check (listing_type in ('rent','sale')),
+  name text not null, address text, city text default 'Lagos', state text default 'Lagos', country text not null default 'Nigeria', listing_type text not null default 'rent' check (listing_type in ('rent','sale')),
   status text not null default 'available' check (status in ('available','occupied','under_offer','sold')), is_advertised boolean not null default false,
   price numeric(14,2) not null default 0,
   bedrooms integer, bathrooms integer, description text, image_url text, image_urls text[] not null default '{}',
