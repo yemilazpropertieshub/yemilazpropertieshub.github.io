@@ -23,6 +23,44 @@ function pdfEscape(value) {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
+function renderPdf(lines) {
+  const pages = [];
+  while (lines.length) pages.push(lines.splice(0, 47));
+  const objects = [];
+  const add = (value) => { objects.push(value); return objects.length; };
+  const catalogId = add('');
+  const pagesId = add('');
+  const fontId = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const pageIds = [];
+  for (const pageLines of pages) {
+    const commands = ['BT', '/F1 10 Tf', '48 752 Td', '14 TL'];
+    pageLines.forEach((line, index) => {
+      if (index === 0) commands.push('/F1 15 Tf');
+      if (line && /^[A-Z][A-Z0-9 &/()'-]{2,}$/.test(line)) commands.push('/F1 11 Tf');
+      else if (index > 0) commands.push('/F1 9 Tf');
+      commands.push(`(${pdfEscape(line)}) Tj`, 'T*');
+    });
+    commands.push('ET');
+    const stream = commands.join('\n');
+    const streamId = add(`<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`);
+    const pageId = add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`);
+    pageIds.push(pageId);
+  }
+  objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
+  let output = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(output, 'ascii'));
+    output += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(output, 'ascii');
+  output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => { output += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+  output += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(output, 'ascii');
+}
+
 export function createPdf({ tenant, landlord, property, guarantor, charges, recipient }) {
   const paid = charges.filter((charge) => charge.status === 'paid');
   const due = charges.filter((charge) => charge.status === 'unpaid');
@@ -60,39 +98,28 @@ export function createPdf({ tenant, landlord, property, guarantor, charges, reci
     for (const paragraph of paragraphs) lines.push(...wrap(paragraph));
     lines.push('');
   }
-  const pages = [];
-  while (lines.length) pages.push(lines.splice(0, 47));
-  const objects = [];
-  const add = (value) => { objects.push(value); return objects.length; };
-  const catalogId = add('');
-  const pagesId = add('');
-  const fontId = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-  const pageIds = [];
-  for (const pageLines of pages) {
-    const commands = ['BT', '/F1 10 Tf', '48 752 Td', '14 TL'];
-    pageLines.forEach((line, index) => {
-      if (index === 0) commands.push('/F1 15 Tf');
-      if (line && /^[A-Z][A-Z0-9 &/()'-]{2,}$/.test(line)) commands.push('/F1 11 Tf');
-      else if (index > 0) commands.push('/F1 9 Tf');
-      commands.push(`(${pdfEscape(line)}) Tj`, 'T*');
-    });
-    commands.push('ET');
-    const stream = commands.join('\n');
-    const streamId = add(`<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`);
-    const pageId = add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`);
-    pageIds.push(pageId);
-  }
-  objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
-  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
-  let output = '%PDF-1.4\n';
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(Buffer.byteLength(output, 'ascii'));
-    output += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xrefOffset = Buffer.byteLength(output, 'ascii');
-  output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => { output += `${String(offset).padStart(10, '0')} 00000 n \n`; });
-  output += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(output, 'ascii');
+  return renderPdf(lines);
+}
+
+export function createPaymentReceiptPdf({ charge, tenant, landlord, property }) {
+  const lines = [
+    'YEMILAZ PROPERTIES  |  PAYMENT RECEIPT',
+    `RECEIPT ${String(charge.id || '').slice(0, 8).toUpperCase()}`,
+    `Issued: ${new Date().toISOString().slice(0, 10)}`,
+    '',
+    'PAYMENT DETAILS',
+    ...wrap(`Tenant: ${tenant.full_name} | Email: ${tenant.email || 'Not provided'} | Phone: ${tenant.phone || 'Not provided'}`),
+    ...wrap(`Landlord: ${landlord.full_name || landlord.business_name || 'Not provided'} | Contact: ${landlord.phone || 'Not provided'}`),
+    ...wrap(`Property: ${property?.name || 'Not allocated'} | Address: ${property?.address || 'Not recorded'} | City: ${property?.city || ''}`),
+    ...wrap(`Payment: ${charge.description || charge.category || 'Payment'} | Category: ${charge.category || 'Not recorded'}`),
+    `Amount received: NGN ${Number(charge.amount || 0).toLocaleString('en-NG')}`,
+    `Payment status: ${String(charge.status || '').toUpperCase()}`,
+    `Date received: ${charge.paid_at || 'Not recorded'}`,
+    '',
+    'This receipt records a payment marked as paid in the landlord management system.',
+    '',
+    'Landlord / authorized agent: _________________________',
+    'Tenant acknowledgement: ____________________________',
+  ];
+  return renderPdf(lines);
 }

@@ -5,7 +5,8 @@ create table if not exists public.properties (
   name text not null, address text, city text default 'Lagos', listing_type text not null default 'rent' check (listing_type in ('rent','sale')),
   status text not null default 'available' check (status in ('available','occupied','under_offer','sold')), is_advertised boolean not null default false,
   price numeric(14,2) not null default 0,
-  bedrooms integer, bathrooms integer, description text, image_url text, created_at timestamptz not null default now()
+  bedrooms integer, bathrooms integer, description text, image_url text, image_urls text[] not null default '{}',
+  created_at timestamptz not null default now(), constraint properties_image_urls_max_5 check (cardinality(image_urls) <= 5)
 );
 create table if not exists public.tenants (
   id uuid primary key default gen_random_uuid(), owner_id uuid not null references auth.users(id) on delete cascade,
@@ -141,3 +142,20 @@ grant execute on function public.allocate_property(uuid, uuid) to authenticated;
 create index if not exists tenants_owner_status_idx on public.tenants(owner_id,status);
 create index if not exists charges_owner_status_idx on public.service_charges(owner_id,status,due_date);
 create index if not exists packet_deliveries_tenant_idx on public.tenant_packet_deliveries(owner_id,tenant_id,created_at desc);
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('property-images', 'property-images', true, 5242880, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = excluded.public,
+  file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+drop policy if exists "Public can view property photos" on storage.objects;
+create policy "Public can view property photos" on storage.objects
+  for select to anon, authenticated using (bucket_id = 'property-images');
+drop policy if exists "Landlords upload photos to their folder" on storage.objects;
+create policy "Landlords upload photos to their folder" on storage.objects for insert to authenticated
+  with check (bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "Landlords update photos in their folder" on storage.objects;
+create policy "Landlords update photos in their folder" on storage.objects for update to authenticated
+  using (bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "Landlords delete photos in their folder" on storage.objects;
+create policy "Landlords delete photos in their folder" on storage.objects for delete to authenticated
+  using (bucket_id = 'property-images' and (storage.foldername(name))[1] = auth.uid()::text);

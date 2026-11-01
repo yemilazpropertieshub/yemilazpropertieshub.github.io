@@ -45,6 +45,7 @@ function App() {
   const [signing, setSigning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingTenant, setSendingTenant] = useState(null);
+  const [downloadingTenant, setDownloadingTenant] = useState(null);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
@@ -60,7 +61,7 @@ function App() {
     let active = true;
     const fields = auth
       ? '*'
-      : 'id,name,address,city,listing_type,price,bedrooms,bathrooms,description,image_url,status,is_advertised';
+      : 'id,name,address,city,listing_type,price,bedrooms,bathrooms,description,image_url,image_urls,status,is_advertised';
     let request = supabase.from('properties').select(fields).order('created_at', { ascending: false });
     request = auth
       ? request.eq('owner_id', auth.id)
@@ -142,6 +143,26 @@ function App() {
     } catch (sendError) {
       setToast(`PDF delivery failed: ${sendError.message}`);
     } finally { setSendingTenant(null); }
+  }
+
+  async function downloadTenantPdfs(tenantId) {
+    if (!import.meta.env.VITE_DOCUMENT_API_URL || !supabase) { setToast('Set up the Node document service before downloading PDFs.'); return; }
+    setDownloadingTenant(tenantId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`${import.meta.env.VITE_DOCUMENT_API_URL.replace(/\/$/, '')}/api/tenant-packets`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ tenantId, action: 'download' }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not generate PDFs');
+      const bytes = Uint8Array.from(atob(result.zipBase64), (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.filename || `Yemilaz-tenant-documents-${tenantId}.zip`;
+      document.body.append(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+      setToast('PDFs generated and downloaded: recipient packets and receipts for recorded paid payments.');
+    } catch (downloadError) { setToast(`PDF generation failed: ${downloadError.message}`); }
+    finally { setDownloadingTenant(null); }
   }
 
   useEffect(() => {
@@ -239,13 +260,32 @@ function App() {
     if (!auth || !supabase) { setToast('Sign in before saving portfolio records.'); return; }
     const form = new FormData(event.currentTarget);
     let table; let row;
+    let uploadedPhotoPaths = [];
     if (page === 'Properties') {
+      const images = form.getAll('images').filter((file) => file instanceof File && file.size > 0);
+      if (images.length > 5) { setToast('Choose no more than five property photos.'); return; }
+      const invalidImage = images.find((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024);
+      if (invalidImage) { setToast('Photos must be JPG, PNG or WebP files no larger than 5 MB each.'); return; }
+      setSaving(true);
+      const photoUrls = [];
+      for (const image of images) {
+        const path = `${auth.id}/${crypto.randomUUID()}-${image.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: uploadError } = await supabase.storage.from('property-images').upload(path, image, {
+          cacheControl: '3600', upsert: false, contentType: image.type,
+        });
+        if (uploadError) {
+          if (uploadedPhotoPaths.length) await supabase.storage.from('property-images').remove(uploadedPhotoPaths);
+          setSaving(false); setToast(`Photo upload failed: ${uploadError.message}`); return;
+        }
+        uploadedPhotoPaths.push(path);
+        photoUrls.push(supabase.storage.from('property-images').getPublicUrl(path).data.publicUrl);
+      }
       table = 'properties';
       row = {
         name: form.get('name'), address: form.get('address') || null, city: form.get('city') || 'Lagos',
         listing_type: form.get('listing_type'), price: Number(form.get('price')), bedrooms: Number(form.get('bedrooms') || 0),
         bathrooms: Number(form.get('bathrooms') || 0), description: form.get('description') || null,
-        image_url: form.get('image_url') || null, status: 'available', is_advertised: form.get('is_advertised') === 'on',
+        image_url: photoUrls[0] || null, image_urls: photoUrls, status: 'available', is_advertised: form.get('is_advertised') === 'on',
       };
     } else if (page === 'Payments & charges') {
       table = 'service_charges';
@@ -265,7 +305,10 @@ function App() {
     setSaving(true);
     const { data, error } = await supabase.from(table).insert({ ...row, owner_id: auth.id }).select().single();
     setSaving(false);
-    if (error) { setToast(error.message); return; }
+    if (error) {
+      if (uploadedPhotoPaths.length) await supabase.storage.from('property-images').remove(uploadedPhotoPaths);
+      setToast(error.message); return;
+    }
     if (page === 'Properties') setPropertyRecords((current) => [data, ...current]);
     if (page === 'Payments & charges') setPaymentRecords((current) => [data, ...current]);
     setRecords((current) => [data, ...current]); setModal(false);
@@ -349,7 +392,8 @@ function App() {
           query={query} setQuery={setQuery} openModal={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}
           onDeleteProperty={deleteProperty} onToggleAdvertisement={toggleAdvertisement}
           onAllocate={(tenant) => { if (!auth) { setAuthModal(true); return; } setAllocationTenant(tenant); }}
-          onRecordPayment={() => setPage('Payments & charges')} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant} hasPaid={paidForTenant}
+          onRecordPayment={() => setPage('Payments & charges')} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant}
+          onDownloadPdfs={downloadTenantPdfs} downloadingTenant={downloadingTenant} hasPaid={paidForTenant}
         />}
         <footer className="site-footer"><span>© 2026 Yemilaz Properties</span><span>Thoughtful living, beautifully managed.</span></footer>
       </main>
@@ -378,7 +422,7 @@ function App() {
         <div className="form-row"><label>Listing type<select name="listing_type"><option value="rent">For rent</option><option value="sale">For sale</option></select></label><label>Price (₦)<input required name="price" type="number" min="0"/></label></div>
         <div className="form-row"><label>Address<input name="address"/></label><label>City<input name="city" defaultValue="Lagos"/></label></div>
         <div className="form-row"><label>Bedrooms<input name="bedrooms" type="number" min="0"/></label><label>Bathrooms<input name="bathrooms" type="number" min="0"/></label></div>
-        <label>Property image URL<input name="image_url" type="url" placeholder="https://…"/></label><label>Description<textarea name="description" rows="3"/></label>
+        <label>Property photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple/><small>Upload up to 5 JPG, PNG or WebP photos, maximum 5 MB each. Your first photo appears as the cover image.</small></label><label>Description<textarea name="description" rows="3"/></label>
         <label className="checkbox-row"><input type="checkbox" name="is_advertised" defaultChecked/> Advertise on the dashboard while available</label>
       </> : page === 'Payments & charges' ? <>
         <label>Payment / charge description<input required name="description" placeholder="e.g. January rent or generator servicing"/></label>
@@ -421,7 +465,11 @@ function LandlordProfilePage({ profile, email, onSave, saving }) {
 }
 
 function PropertyCard({ property }) {
-  return <article className="property-card"><div className="property-image" style={{ backgroundImage: `url(${property.image_url || '/lagos-home.png'})` }}><span className="property-tag">{property.listing_type === 'sale' ? 'For sale' : 'For rent'}</span></div><div className="property-info"><span className="property-area">{[property.address, property.city].filter(Boolean).join(', ') || 'Lagos'}</span><h3>{property.name}</h3><div className="property-features"><span><BedDouble size={15}/>{property.bedrooms || 0} beds</span><span><Home size={14}/>{property.bathrooms || 0} baths</span></div><div className="property-price"><b>{currency(property.price)}</b><span>{property.listing_type === 'rent' ? '/ year' : ''}</span><a href={`mailto:hello@yemilazproperties.com?subject=${encodeURIComponent(`Property enquiry: ${property.name}`)}`} aria-label={`Enquire about ${property.name}`}><ArrowUpRight size={16}/></a></div></div></article>;
+  const images = property.image_urls?.length ? property.image_urls : [property.image_url].filter(Boolean);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const cover = images[photoIndex] || '/lagos-home.png';
+  const changePhoto = (event, direction) => { event.preventDefault(); event.stopPropagation(); setPhotoIndex((current) => (current + direction + images.length) % images.length); };
+  return <article className="property-card"><div className="property-image" style={{ backgroundImage: `url(${cover})` }}><span className="property-tag">{property.listing_type === 'sale' ? 'For sale' : 'For rent'}</span>{images.length > 1 && <div className="photo-controls"><button type="button" aria-label="Previous property photo" onClick={(event) => changePhoto(event, -1)}>‹</button><span>{photoIndex + 1} / {images.length}</span><button type="button" aria-label="Next property photo" onClick={(event) => changePhoto(event, 1)}>›</button></div>}</div><div className="property-info"><span className="property-area">{[property.address, property.city].filter(Boolean).join(', ') || 'Lagos'}</span><h3>{property.name}</h3><div className="property-features"><span><BedDouble size={15}/>{property.bedrooms || 0} beds</span><span><Home size={14}/>{property.bathrooms || 0} baths</span></div><div className="property-price"><b>{currency(property.price)}</b><span>{property.listing_type === 'rent' ? '/ year' : ''}</span><a href={`mailto:hello@yemilazproperties.com?subject=${encodeURIComponent(`Property enquiry: ${property.name}`)}`} aria-label={`Enquire about ${property.name}`}><ArrowUpRight size={16}/></a></div></div></article>;
 }
 
 function Metric({ icon: Icon, label, value, note, color }) {
@@ -432,7 +480,7 @@ function Activity({ icon: Icon, tone, title, text, time }) {
   return <div className="activity-item"><span className={`activity-icon ${tone}`}><Icon size={15}/></span><div className="activity-copy"><b>{title}</b><span>{text}</span><small>{time}</small></div></div>;
 }
 
-function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onToggleAdvertisement, onAllocate, onRecordPayment, onSendPacket, sendingTenant, hasPaid }) {
+function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onToggleAdvertisement, onAllocate, onRecordPayment, onSendPacket, sendingTenant, onDownloadPdfs, downloadingTenant, hasPaid }) {
   const copy = {
     Properties: ['Property portfolio', 'Delete properties, manage availability, and choose which available homes appear on the dashboard.'],
     Tenants: ['Tenant directory', 'Register tenants, record payments, and allocate available properties after payment.'],
@@ -460,7 +508,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
   };
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div><h1>{copy[0]}</h1><p>{copy[1]}</p></div><button className="primary-button" onClick={openModal}><Plus size={17}/>{page === 'Tenants' ? 'Register a tenant' : page === 'Properties' ? 'Add a property' : page === 'Payments & charges' ? 'Record a payment' : 'Add a record'}</button></div>
     <div className="panel management-panel"><div className="panel-heading"><div><h2>{page}</h2><span className="management-sub">{page === 'Tenants' ? `${tenants.length} tenant records` : `${records.length} records`}</span></div><button className="filter-button" onClick={onRecordPayment}><Filter size={15}/> Filters <ChevronDown size={13}/></button></div><label className="search-box wide-search"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${page.toLowerCase()}...`}/></label>
-      {page === 'Tenants' ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>RENT</th><th>PAYMENT</th><th>ACTION</th></tr></thead><tbody>{tenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase())).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td><td>{hasPaid(tenant.id) ? 'Payment recorded' : 'No payment'}</td><td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => hasPaid(tenant.id) ? onAllocate(tenant) : onRecordPayment()}>{tenant.property_id ? 'Change property' : hasPaid(tenant.id) ? 'Allocate' : 'Record payment'}</button><button className="secondary-button compact-button" disabled={sendingTenant === tenant.id} onClick={() => onSendPacket(tenant.id)}>{sendingTenant === tenant.id ? 'Sending…' : 'Send PDFs'}</button></div></td></tr>)}</tbody></table>{tenants.length === 0 && <EmptyState title="No tenants yet" text="Register a tenant to start recording leases and payments."/>}</div>
+      {page === 'Tenants' ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>RENT</th><th>PAYMENT</th><th>ACTION</th></tr></thead><tbody>{tenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase())).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td><td>{hasPaid(tenant.id) ? 'Payment recorded' : 'No payment'}</td><td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => hasPaid(tenant.id) ? onAllocate(tenant) : onRecordPayment()}>{tenant.property_id ? 'Change property' : hasPaid(tenant.id) ? 'Allocate' : 'Record payment'}</button><button className="secondary-button compact-button" disabled={sendingTenant === tenant.id} onClick={() => onSendPacket(tenant.id)}>{sendingTenant === tenant.id ? 'Sending…' : 'Send PDFs'}</button><button className="secondary-button compact-button" disabled={downloadingTenant === tenant.id} onClick={() => onDownloadPdfs(tenant.id)}>{downloadingTenant === tenant.id ? 'Generating…' : 'Download PDFs'}</button></div></td></tr>)}</tbody></table>{tenants.length === 0 && <EmptyState title="No tenants yet" text="Register a tenant to start recording leases and payments."/>}</div>
       : filtered.length ? <div className="table-wrap"><table><thead><tr>{columns.map(([label]) => <th key={label}>{label.toUpperCase()}</th>)}{page === 'Properties' && <th>ACTION</th>}</tr></thead><tbody>{filtered.map((record, index) => <tr key={record.id || index}>{columns.map(([label, key]) => <td key={key}>{value(key, key === 'tenant_name' ? record : record[key])}</td>)}{page === 'Properties' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status !== 'available'} onClick={() => onToggleAdvertisement(record)}>{record.is_advertised ? 'Hide ad' : 'Advertise'}</button><button className="danger-button" title={`Delete ${record.name}`} onClick={() => onDeleteProperty(record)}><Trash2 size={15}/><span>Delete</span></button></div></td>}</tr>)}</tbody></table></div>
       : <EmptyState title={`No ${page.toLowerCase()} yet`} text={page === 'Properties' ? 'Add a property, then choose whether to advertise it on the dashboard.' : page === 'Payments & charges' ? 'Record rent, deposit and service payments here.' : `Add your first ${page.toLowerCase()} record to get started.`} action={openModal}/>}</div>
     </section>;
