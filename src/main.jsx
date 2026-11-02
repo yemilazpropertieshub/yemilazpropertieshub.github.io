@@ -262,7 +262,9 @@ function App() {
       const failed = result.deliveries.filter((item) => item.status === 'failed');
       setToast(`${sent} individual PDF email${sent === 1 ? '' : 's'} sent${failed.length ? `; failed for ${failed.map((item) => item.role).join(', ')}` : ''}.`);
     } catch (sendError) {
-      setToast(`PDF delivery failed: ${sendError.message}`);
+      setToast(sendError.message === 'Failed to fetch'
+        ? 'Cannot reach the PDF service. Check that Render is Live and its FRONTEND_ORIGINS exactly matches this website, then open the service /health address.'
+        : `PDF delivery failed: ${sendError.message}`);
     } finally { setSendingTenant(null); }
   }
 
@@ -281,8 +283,12 @@ function App() {
       const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.filename || `Yemilaz-tenant-documents-${tenantId}.zip`;
       document.body.append(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
-      setToast('PDFs generated and downloaded: recipient packets and receipts for recorded paid payments.');
-    } catch (downloadError) { setToast(`PDF generation failed: ${downloadError.message}`); }
+      setToast(`Document pack downloaded: ${result.documentCount || 'multiple'} tenancy PDFs, ${result.copyCount || 'multiple'} recipient copies, and ${result.receiptCount ?? 0} payment receipts.`);
+    } catch (downloadError) {
+      setToast(downloadError.message === 'Failed to fetch'
+        ? 'Cannot reach the PDF service. Check that Render is Live and its FRONTEND_ORIGINS exactly matches this website, then open the service /health address.'
+        : `PDF generation failed: ${downloadError.message}`);
+    }
     finally { setDownloadingTenant(null); }
   }
 

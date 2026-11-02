@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { createPdf, createPaymentReceiptPdf } from './pdf.mjs';
+import { createPdf, createPaymentReceiptPdf, createTenantDocumentSet } from './pdf.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -100,7 +100,7 @@ async function recordDelivery(delivery, ownerId, tenantId, accessToken) {
   }
 }
 
-app.get('/health', (_req, res) => res.json({ ok: true, configured: Boolean(configReady()) }));
+app.get('/health', (_req, res) => res.json({ ok: true, downloadConfigured: Boolean(configReady('download')), emailConfigured: Boolean(configReady('email')) }));
 
 app.post('/api/tenant-packets', async (req, res) => {
   const action = req.body?.action === 'download' ? 'download' : 'email';
@@ -156,16 +156,18 @@ app.post('/api/tenant-packets', async (req, res) => {
     const documentRecipients = action === 'download' ? allRecipients : recipients;
     const files = documentRecipients.map((recipient) => ({
       name: `Packets/${tenantSlug}-${safeName(recipient.role)}.pdf`,
-      data: createPdf({ tenant, landlord, property, guarantor, charges: charges || [], recipient }),
+      data: createPdf({ tenant, landlord, property, guarantor, charges: charges || [], recipient, ownerEmail: user.email }),
     }));
+    const sharedDocuments = createTenantDocumentSet({ tenant, landlord, property, guarantor, charges: charges || [], agent, caretaker, ownerEmail: user.email })
+      .map((document) => ({ ...document, name: `Documents/${document.name}` }));
     const paidCharges = (charges || []).filter((charge) => charge.status === 'paid');
     const receiptFiles = paidCharges.map((charge, index) => ({
       name: `Receipts/${tenantSlug}-receipt-${String(index + 1).padStart(2, '0')}-${safeName(charge.category || charge.description)}.pdf`,
       data: createPaymentReceiptPdf({ charge, tenant, landlord, property }),
     }));
     if (action === 'download') {
-      const zip = createZip([...files, ...receiptFiles]);
-      return res.json({ filename: `Yemilaz-${tenantSlug}-documents.zip`, zipBase64: zip.toString('base64') });
+      const zip = createZip([...sharedDocuments, ...files, ...receiptFiles]);
+      return res.json({ filename: `Yemilaz-${tenantSlug}-documents.zip`, zipBase64: zip.toString('base64'), documentCount: sharedDocuments.length, copyCount: files.length, receiptCount: receiptFiles.length });
     }
 
     const deliveries = [];
@@ -182,6 +184,7 @@ app.post('/api/tenant-packets', async (req, res) => {
             text: `Hello ${recipient.name || 'there'},\n\n${landlord.business_name || 'Yemilaz Properties'} has prepared your individual tenancy document packet for ${property?.name || 'the tenancy'}. This copy is addressed to you as ${recipient.role}. The attached receipt PDFs list payments recorded as paid.\n\nPlease contact the landlord if anything needs correction.\n\nYemilaz Properties`,
             attachments: [
               { filename: `Yemilaz-${recipient.role}-tenancy-${tenant.id.slice(0, 8)}.pdf`, content: packet.data.toString('base64') },
+              ...sharedDocuments.map((document) => ({ filename: document.name.split('/').at(-1), content: document.data.toString('base64') })),
               ...receiptFiles.map((receipt) => ({ filename: receipt.name.split('/').at(-1), content: receipt.data.toString('base64') })),
             ],
           }),
