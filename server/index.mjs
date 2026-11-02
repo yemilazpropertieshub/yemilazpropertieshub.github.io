@@ -103,8 +103,9 @@ async function recordDelivery(delivery, ownerId, tenantId, accessToken) {
 app.get('/health', (_req, res) => res.json({ ok: true, downloadConfigured: Boolean(configReady('download')), emailConfigured: Boolean(configReady('email')) }));
 
 app.post('/api/tenant-packets', async (req, res) => {
-  const action = req.body?.action === 'download' ? 'download' : 'email';
-  if (!configReady(action)) return res.status(503).json({ error: 'Document email service is not fully configured.' });
+  const action = ['download', 'tenant-download'].includes(req.body?.action) ? req.body.action : 'email';
+  const isDownload = action !== 'email';
+  if (!configReady(isDownload ? 'download' : 'email')) return res.status(503).json({ error: 'Document service is not fully configured.' });
   const accessToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!accessToken) return res.status(401).json({ error: 'Sign in is required.' });
   const user = await authenticate(accessToken);
@@ -113,28 +114,36 @@ app.post('/api/tenant-packets', async (req, res) => {
   if (!/^[0-9a-f-]{36}$/i.test(tenantId)) return res.status(400).json({ error: 'A valid tenant ID is required.' });
 
   try {
-    // Every lookup uses the tenant's own signed-in JWT, so Supabase RLS enforces landlord ownership.
-    const [tenantRows, profileRows, guarantors] = await Promise.all([
-      supabaseRequest(`tenants?id=eq.${tenantId}&owner_id=eq.${user.id}&select=*`, accessToken),
-      supabaseRequest(`landlord_profiles?user_id=eq.${user.id}&select=*`, accessToken),
-      supabaseRequest(`guarantors?tenant_id=eq.${tenantId}&owner_id=eq.${user.id}&select=*`, accessToken),
-    ]);
+    // Tenant downloads are constrained by the tenant's verified email and tenancy RLS.
+    if (action !== 'tenant-download' && user.email) {
+      await supabaseRequest(`landlord_profiles?user_id=eq.${user.id}`, accessToken, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ contact_email: user.email }),
+      });
+    }
+    const tenantRows = await supabaseRequest(action === 'tenant-download'
+      ? `tenants?id=eq.${tenantId}&email=eq.${encodeURIComponent(user.email)}&select=*`
+      : `tenants?id=eq.${tenantId}&owner_id=eq.${user.id}&select=*`, accessToken);
     const tenant = tenantRows?.[0];
+    const ownerId = tenant?.owner_id;
+    const [profileRows, guarantors] = tenant && ownerId ? await Promise.all([
+      supabaseRequest(`landlord_profiles?user_id=eq.${ownerId}&select=*`, accessToken),
+      supabaseRequest(`guarantors?tenant_id=eq.${tenantId}&owner_id=eq.${ownerId}&select=*`, accessToken),
+    ]) : [[], []];
     const landlord = profileRows?.[0];
     const guarantor = guarantors?.[0];
     if (!tenant || !landlord) return res.status(404).json({ error: 'Tenant or landlord profile not found in this account.' });
     const [properties, charges, agentRows, caretakerRows] = await Promise.all([
-      tenant.property_id ? supabaseRequest(`properties?id=eq.${tenant.property_id}&owner_id=eq.${user.id}&select=*`, accessToken) : [],
-      supabaseRequest(`service_charges?tenant_id=eq.${tenant.id}&owner_id=eq.${user.id}&select=id,property_id,description,category,amount,status,due_date,paid_at&order=created_at.asc`, accessToken),
-      tenant.agent_id ? supabaseRequest(`staff?id=eq.${tenant.agent_id}&owner_id=eq.${user.id}&select=full_name,email,phone,role`, accessToken) : [],
-      tenant.caretaker_id ? supabaseRequest(`staff?id=eq.${tenant.caretaker_id}&owner_id=eq.${user.id}&select=full_name,email,phone,role`, accessToken) : [],
+      tenant.property_id ? supabaseRequest(`properties?id=eq.${tenant.property_id}&owner_id=eq.${ownerId}&select=*`, accessToken) : [],
+      supabaseRequest(`service_charges?tenant_id=eq.${tenant.id}&owner_id=eq.${ownerId}&select=id,property_id,description,category,amount,status,due_date,paid_at&order=created_at.asc`, accessToken),
+      tenant.agent_id ? supabaseRequest(`staff?id=eq.${tenant.agent_id}&owner_id=eq.${ownerId}&select=full_name,email,phone,role`, accessToken) : [],
+      tenant.caretaker_id ? supabaseRequest(`staff?id=eq.${tenant.caretaker_id}&owner_id=eq.${ownerId}&select=full_name,email,phone,role`, accessToken) : [],
     ]);
     const property = properties?.[0] || null;
     const agent = agentRows?.[0] || null;
     const caretaker = caretakerRows?.[0] || null;
 
     const allRecipients = [
-      { role: 'landlord', name: landlord.full_name || landlord.business_name, email: user.email },
+      { role: 'landlord', name: landlord.full_name || landlord.business_name, email: action === 'tenant-download' ? landlord.contact_email : user.email },
       { role: 'tenant', name: tenant.full_name, email: tenant.email },
       { role: 'guarantor', name: guarantor?.full_name, email: guarantor?.email },
       { role: 'lawyer', name: landlord.lawyer_name, email: landlord.lawyer_email },
@@ -142,30 +151,31 @@ app.post('/api/tenant-packets', async (req, res) => {
       { role: 'caretaker', name: caretaker?.full_name, email: caretaker?.email },
     ].filter((recipient) => recipient.role === 'landlord' || recipient.role === 'tenant' || (recipient.role === 'guarantor' && guarantor) || (recipient.role === 'lawyer' && (landlord.lawyer_name || landlord.lawyer_email)) || (recipient.role === 'agent' && agent) || (recipient.role === 'caretaker' && caretaker));
     const recipients = allRecipients.filter((recipient) => recipient.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email));
-    if (action === 'email' && (!recipients.some((recipient) => recipient.role === 'tenant') || !recipients.some((recipient) => recipient.role === 'guarantor'))) {
+    if (!isDownload && (!recipients.some((recipient) => recipient.role === 'tenant') || !recipients.some((recipient) => recipient.role === 'guarantor'))) {
       return res.status(422).json({ error: 'Tenant and guarantor email addresses are needed before sending the packet.' });
     }
-    if (action === 'email' && !recipients.some((recipient) => recipient.role === 'lawyer')) {
+    if (!isDownload && !recipients.some((recipient) => recipient.role === 'lawyer')) {
       return res.status(422).json({ error: 'Add a lawyer email in the landlord profile before sending the packet.' });
     }
-    if (action === 'email' && !recipients.some((recipient) => ['agent', 'caretaker'].includes(recipient.role))) {
+    if (!isDownload && !recipients.some((recipient) => ['agent', 'caretaker'].includes(recipient.role))) {
       return res.status(422).json({ error: 'Assign an agent or caretaker with an email to receive a copy.' });
     }
 
     const tenantSlug = safeName(tenant.full_name);
-    const documentRecipients = action === 'download' ? allRecipients : recipients;
+    const ownerEmail = action === 'tenant-download' ? landlord.contact_email : user.email;
+    const documentRecipients = action === 'tenant-download' ? allRecipients.filter((recipient) => recipient.role === 'tenant') : isDownload ? allRecipients : recipients;
     const files = documentRecipients.map((recipient) => ({
       name: `Packets/${tenantSlug}-${safeName(recipient.role)}.pdf`,
-      data: createPdf({ tenant, landlord, property, guarantor, charges: charges || [], recipient, ownerEmail: user.email }),
+      data: createPdf({ tenant, landlord, property, guarantor, charges: charges || [], recipient, ownerEmail }),
     }));
-    const sharedDocuments = createTenantDocumentSet({ tenant, landlord, property, guarantor, charges: charges || [], agent, caretaker, ownerEmail: user.email })
+    const sharedDocuments = createTenantDocumentSet({ tenant, landlord, property, guarantor, charges: charges || [], agent, caretaker, ownerEmail })
       .map((document) => ({ ...document, name: `Documents/${document.name}` }));
     const paidCharges = (charges || []).filter((charge) => charge.status === 'paid');
     const receiptFiles = paidCharges.map((charge, index) => ({
       name: `Receipts/${tenantSlug}-receipt-${String(index + 1).padStart(2, '0')}-${safeName(charge.category || charge.description)}.pdf`,
       data: createPaymentReceiptPdf({ charge, tenant, landlord, property }),
     }));
-    if (action === 'download') {
+    if (isDownload) {
       const zip = createZip([...sharedDocuments, ...files, ...receiptFiles]);
       return res.json({ filename: `Yemilaz-${tenantSlug}-documents.zip`, zipBase64: zip.toString('base64'), documentCount: sharedDocuments.length, copyCount: files.length, receiptCount: receiptFiles.length });
     }
