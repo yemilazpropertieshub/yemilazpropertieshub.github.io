@@ -67,7 +67,7 @@ GitHub Pages serves only the static website; it cannot safely keep an email API 
 1. Create a Resend account and verify the email domain/address that will appear in the From field.
 2. Deploy the `server` folder to a hosting service that runs Node.js. Set the variables listed in [`server/.env.example`](server/.env.example) in that host’s private environment settings. Do not commit a real `.env` file or Resend key.
 3. Set `FRONTEND_ORIGINS` to the exact live GitHub Pages origin. For this repository it is `https://yemilazpropertieshub.github.io`.
-4. Set `VITE_DOCUMENT_API_URL` in the GitHub Actions repository variable or build environment to the Node service base URL, then deploy the frontend again.
+4. Set `VITE_DOCUMENT_API_URL` in GitHub Actions repository variables (or repository secrets) to the Node service base URL, then deploy the frontend again. The Pages workflow accepts either location, with the variable taking priority.
 5. In **Landlord profile**, enter the lawyer’s email and review the agreement terms and house rules. Add agents and caretakers with email addresses under their directories.
 6. Register a tenant with tenant and guarantor email addresses. Select any assigned agent/caretaker. When saved, the service emails a separate PDF attachment to the landlord, tenant, guarantor, lawyer, and selected agent/caretaker.
 
@@ -79,7 +79,7 @@ Each recipient gets a one-to-one email with a copy labeled for their role. The p
 2. Commit the changes to `main`, then click **Push origin**.
 3. GitHub Actions builds and publishes the site automatically. Wait for the newest run to turn green.
 
-The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_KEY` from repository Actions secrets. Add `VITE_DOCUMENT_API_URL` as a repository Actions variable. Never put a Supabase service-role/secret key or Resend key in this browser app; the Node service uses the signed-in user token and Supabase row-level security.
+The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_KEY` from repository Actions secrets. It reads `VITE_DOCUMENT_API_URL` from repository Actions variables or secrets. Never put a Supabase service-role/secret key or Resend key in this browser app; the Node service uses the signed-in user token and Supabase row-level security.
 
 ## Run locally
 
