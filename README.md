@@ -5,7 +5,7 @@ A responsive property marketing and management website built with Node.js, React
 ## Property and tenant workflow
 
 - The public homepage includes manager sign-in and property advertisements.
-- Only properties marked **Advertise** and still **Available** appear on the public homepage.
+- Advertised **Available** and **Reserved** properties appear on the public homepage with a clear status badge. Rented and sold properties are hidden.
 - Register tenants and record rent or deposit payments. A property can be allocated only after a paid rent or deposit record exists.
 - Allocating a property marks it occupied and removes it from public advertisements. Releasing or changing an allocation returns the old property to Available.
 - Record later rent, deposit, and service-charge payments in **Payments & charges**.
@@ -21,6 +21,8 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 4. [`supabase/migrations/20261104_international_property_locations.sql`](supabase/migrations/20261104_international_property_locations.sql)
 5. [`supabase/migrations/20261105_landlord_branding_templates.sql`](supabase/migrations/20261105_landlord_branding_templates.sql)
 6. [`supabase/migrations/20261106_landlord_invitation_security.sql`](supabase/migrations/20261106_landlord_invitation_security.sql)
+7. [`supabase/migrations/20261107_public_property_complaints.sql`](supabase/migrations/20261107_public_property_complaints.sql)
+8. [`supabase/migrations/20261108_listing_and_resolution_workflows.sql`](supabase/migrations/20261108_listing_and_resolution_workflows.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -39,6 +41,8 @@ on conflict (user_id) do nothing;
 ```
 
 The administrator then signs in, opens **Landlord access**, and generates codes for landlords. Do not issue a code publicly. Each landlord enters their code once during signup; it becomes unusable as soon as the account is created.
+
+The seventh migration adds public complaint intake. The eighth adds listing enquiries, viewing requests, listing reports, viewing analytics, listing verification review, complaint message history, stakeholder complaint accounts, and two-party resolution approval. Stakeholder accounts can access only cases they lodge or are linked to; landlord accounts remain invitation-only. For continuous complaint chat, submit while signed in or create a **Tenant or complainant** account with the email address on the complaint or tenant record. The other participant can propose a resolution, and only the other participant can approve it; either may request more work. Landlords can approve verification requests only after checking ownership evidence outside the website; the administrator records the decision under **Listing verification**. Public enquiry and viewing submissions appear in the property manager’s private workspace.
 
 ## Brand landlord confirmation email and links
 
@@ -82,5 +86,5 @@ The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_K
 1. Install Node.js 20 or newer.
 2. Run `npm install` and then `npm run dev`.
 3. Copy `.env.example` to `.env.local` and set Supabase URL, publishable/anon key, and document API URL.
-4. For a new project, run `supabase/schema.sql` and then migration 6 above. For the existing project, run all six migrations above in order. Then bootstrap the platform administrator as described above.
+4. For a new project, run `supabase/schema.sql`, then migrations 6, 7, and 8 above. For the existing project, run all eight migrations above in order. Then bootstrap the platform administrator as described above.
 5. For the Node mail service, run `npm install` inside `server`, copy `server/.env.example` to `server/.env`, fill in its values, and run `npm start`.

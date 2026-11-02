@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import {
   ArrowRight, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
   CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut, UserRound,
   Menu, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
-  Trash2, Users, Wallet, X,
+  Trash2, Users, Wallet, X, MapPin, Heart,
 } from 'lucide-react';
 import './style.css';
 
@@ -55,7 +55,7 @@ const demoTenants = [
   { id: 'demo-4', full_name: 'Oluwaseun Adebayo', notes: 'Cedar House · 1B', lease_start: '2024-11-20', status: 'active', rent_amount: 15000000 },
 ];
 const nav = [
-  { title: 'Workspace', links: [['Overview', LayoutDashboard], ['Properties', Building2], ['Tenants', Users], ['Payments & charges', Wallet]] },
+  { title: 'Workspace', links: [['Overview', LayoutDashboard], ['Properties', Building2], ['Tenants', Users], ['Payments & charges', Wallet], ['Enquiries', FileText], ['Viewing requests', CalendarDays], ['Listing reports', ShieldCheck], ['Complaints', CircleHelp]] },
   { title: 'People', links: [['Guarantors', ShieldCheck], ['Caretakers', KeyRound], ['Agents', Users], ['Landlord profile', UserRound]] },
 ];
 
@@ -74,6 +74,8 @@ function App() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All properties');
   const [auth, setAuth] = useState(null);
+  const [accountRole, setAccountRole] = useState('landlord');
+  const [stakeholderCases, setStakeholderCases] = useState([]);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [authNotice, setAuthNotice] = useState(null);
   const [signing, setSigning] = useState(false);
@@ -82,6 +84,8 @@ function App() {
   const [downloadingTenant, setDownloadingTenant] = useState(null);
   const [toast, setToast] = useState('');
   const [showComplaintRoom, setShowComplaintRoom] = useState(false);
+  const [activeComplaint, setActiveComplaint] = useState(null);
+  const [complaintMessages, setComplaintMessages] = useState([]);
 
   useEffect(() => {
     document.title = auth
@@ -110,15 +114,25 @@ function App() {
           : { kind: 'success', message: 'Your Yemilaz Properties landlord profile is confirmed. Welcome to your workspace.' });
       });
     }
-    supabase.auth.getSession().then(({ data }) => { if (active) setAuth(data.session?.user || null); });
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      const user = data.session?.user || null; setAuth(user);
+      if (user) {
+        const { data: profile } = await supabase.from('stakeholder_profiles').select('user_id').eq('user_id', user.id).maybeSingle();
+        if (active) setAccountRole(profile ? 'stakeholder' : 'landlord');
+      }
+    });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setAuth(session?.user || null);
-      if (session?.user) supabase.rpc('is_platform_admin').then(({ data }) => setIsPlatformAdmin(data === true));
-      else setIsPlatformAdmin(false);
+      if (session?.user) {
+        supabase.rpc('is_platform_admin').then(({ data }) => setIsPlatformAdmin(data === true));
+        supabase.from('stakeholder_profiles').select('user_id').eq('user_id', session.user.id).maybeSingle().then(({ data }) => setAccountRole(data ? 'stakeholder' : 'landlord'));
+      } else { setIsPlatformAdmin(false); setAccountRole('landlord'); }
       if (event === 'SIGNED_IN' && new URLSearchParams(window.location.search).get('auth') === 'confirmed') {
         setAuthNotice({ kind: 'success', message: 'Your Yemilaz Properties profile is confirmed. Welcome to your workspace.' });
         window.history.replaceState({}, document.title, window.location.pathname);
       }
+      if (event === 'PASSWORD_RECOVERY') setAuthNotice({ kind: 'reset', message: 'Choose a new password for your Yemilaz Properties account.' });
     });
     return () => { active = false; subscription.unsubscribe(); };
   }, []);
@@ -126,13 +140,19 @@ function App() {
   useEffect(() => {
     if (!supabase) return;
     let active = true;
+    if (auth && accountRole === 'stakeholder') {
+      setTenants([]); setPaymentRecords([]); setStaffRecords([]); setLandlordProfile(null);
+      supabase.from('properties').select('id,owner_id,name,address,city,state,country,listing_type,property_type,price,bedrooms,bathrooms,description,amenities,image_url,image_urls,status,is_advertised,verification_status,viewing_notes,view_count')
+        .then(({ data }) => { if (active) setPropertyRecords(data || []); });
+      return () => { active = false; };
+    }
     const fields = auth
       ? '*'
-      : 'id,name,address,city,state,country,listing_type,price,bedrooms,bathrooms,description,image_url,image_urls,status,is_advertised';
+      : 'id,owner_id,name,address,city,state,country,listing_type,property_type,price,bedrooms,bathrooms,description,amenities,image_url,image_urls,status,is_advertised,verification_status,viewing_notes,view_count';
     let request = supabase.from('properties').select(fields).order('created_at', { ascending: false });
     request = auth
       ? request.eq('owner_id', auth.id)
-      : request.eq('status', 'available').eq('is_advertised', true);
+      : request.in('status', ['available','reserved']).eq('is_advertised', true);
     request.then(({ data, error }) => {
       if (!active) return;
       if (error) { if (auth) setToast(error.message); return; }
@@ -159,30 +179,41 @@ function App() {
       setPaymentRecords([]);
     }
     return () => { active = false; };
-  }, [auth]);
+  }, [auth, accountRole]);
+
+  useEffect(() => {
+    if (!auth || accountRole !== 'stakeholder' || !supabase) { setStakeholderCases([]); return; }
+    const refresh = () => supabase.from('property_complaints').select('*').or(`authenticated_reporter_id.eq.${auth.id},other_participant_id.eq.${auth.id}`).order('created_at', { ascending: false })
+      .then(({ data, error }) => { if (error) setToast(error.message); else setStakeholderCases(data || []); });
+    refresh(); const timer = window.setInterval(refresh, 12000);
+    return () => window.clearInterval(timer);
+  }, [auth, accountRole]);
 
   async function registerLandlord(event) {
     event.preventDefault();
     if (!supabase) { setToast('Yemilaz Properties sign-up is temporarily unavailable. Please try again later.'); return; }
     setSigning(true);
     const form = new FormData(event.currentTarget);
+    const accountRoleForSignup = form.get('account_role') || 'landlord';
     const inviteCode = String(form.get('invite_code') || '').trim().toLowerCase();
-    const { data: validInvite, error: inviteError } = await supabase.rpc('validate_landlord_invite', { p_invite_code: inviteCode });
-    if (inviteError || !validInvite) {
-      setSigning(false);
-      setToast('That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.');
-      return;
+    if (accountRoleForSignup === 'landlord') {
+      const { data: validInvite, error: inviteError } = await supabase.rpc('validate_landlord_invite', { p_invite_code: inviteCode });
+      if (inviteError || !validInvite) {
+        setSigning(false);
+        setToast('That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.');
+        return;
+      }
     }
     const { error } = await supabase.auth.signUp({
       email: form.get('email'), password: form.get('password'),
       options: {
         emailRedirectTo: `${window.location.origin}${window.location.pathname}?auth=confirmed`,
-        data: { full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon', invite_code: inviteCode },
+        data: { account_role: accountRoleForSignup, full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon', invite_code: inviteCode },
       },
     });
     setSigning(false);
     if (error) setToast(/invite|invitation|access code/i.test(error.message) ? 'That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.' : 'We could not create this Yemilaz Properties account. Check the details and try again.');
-    else { setAuthModal(false); setAuthNotice({ kind: 'pending', message: 'We have sent a confirmation email from Yemilaz Properties. Confirm your email to activate your landlord profile.' }); }
+    else { setAuthModal(false); setAuthNotice({ kind: 'pending', message: 'We have sent a confirmation email from Yemilaz Properties. Confirm your email to activate your account.' }); }
   }
 
   async function resendConfirmation(event) {
@@ -259,13 +290,42 @@ function App() {
     if (!auth || !supabase) { setRecords([]); return; }
     if (page === 'Properties') { setRecords(propertyRecords); return; }
     if (page === 'Payments & charges') { setRecords(paymentRecords); return; }
-    const table = { Guarantors: 'guarantors', Caretakers: 'staff', Agents: 'staff' }[page];
+    const table = { Guarantors: 'guarantors', Caretakers: 'staff', Agents: 'staff', Enquiries: 'property_enquiries', 'Viewing requests': 'property_viewing_requests', 'Listing reports': 'property_listing_reports', Complaints: 'property_complaints' }[page];
     if (!table) { setRecords([]); return; }
     let request = supabase.from(table).select('*').eq('owner_id', auth.id).order('created_at', { ascending: false });
     if (page === 'Caretakers') request = request.eq('role', 'caretaker');
     if (page === 'Agents') request = request.eq('role', 'agent');
-    request.then(({ data, error }) => { if (error) setToast(error.message); else setRecords(data || []); });
+    if (page === 'Complaints') request = request.eq('landlord_id', auth.id);
+    request.then(({ data, error }) => { if (error) setToast(error.message); else setRecords((data || []).map((item) => ({ ...item, property_name: propertyRecords.find((property) => property.id === item.property_id)?.name || 'Property listing' }))); });
   }, [auth, page, propertyRecords, paymentRecords]);
+
+  useEffect(() => {
+    if (!activeComplaint || !supabase) { setComplaintMessages([]); return; }
+    const refresh = () => supabase.from('property_complaint_messages').select('*').eq('complaint_id', activeComplaint.id).order('created_at')
+      .then(({ data, error }) => { if (error) setToast(error.message); else setComplaintMessages(data || []); });
+    refresh(); const timer = window.setInterval(refresh, 7000);
+    return () => window.clearInterval(timer);
+  }, [activeComplaint]);
+
+  async function addComplaintMessage(event) {
+    event.preventDefault();
+    if (!auth || !activeComplaint) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const { data, error } = await supabase.from('property_complaint_messages').insert({ complaint_id: activeComplaint.id, sender_id: auth.id, message: form.get('message') }).select().single();
+    if (error) { setToast(error.message); return; }
+    setComplaintMessages((current) => [...current, data]); formElement.reset();
+  }
+
+  async function changeComplaintResolution(action) {
+    if (!activeComplaint) return;
+    const rpcName = action === 'approve' ? 'approve_complaint_resolution' : action === 'rework' ? 'request_complaint_rework' : 'propose_complaint_resolution';
+    const { error } = await supabase.rpc(rpcName, { p_complaint_id: activeComplaint.id });
+    if (error) { setToast(error.message); return; }
+    const { data } = await supabase.from('property_complaints').select('*').eq('id', activeComplaint.id).single();
+    setActiveComplaint(data); setRecords((current) => current.map((item) => item.id === data.id ? data : item));
+    setToast(action === 'approve' ? 'Resolution approved. The complaint is closed.' : action === 'rework' ? 'The case is reopened for further discussion.' : 'Resolution proposed. The other participant must approve it.');
+  }
 
   const availableProperties = propertyRecords.filter((property) => property.status === 'available');
   const tenantProperty = (tenant) => propertyRecords.find((property) => property.id === tenant.property_id);
@@ -289,6 +349,27 @@ function App() {
     setSigning(false);
     if (error) setToast('Those Yemilaz Properties sign-in details could not be verified. Check your email and password.');
     else { setAuth(data.user); setAuthModal(false); setToast('Signed in securely to Yemilaz Properties.'); }
+  }
+
+  async function requestPasswordReset(email) {
+    if (!supabase || !email) { setToast('Enter your account email first.'); return; }
+    setSigning(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}${window.location.pathname}?auth=reset` });
+    setSigning(false);
+    if (error) setToast('We could not send a password reset email. Check the email address and try again.');
+    else { setAuthModal(false); setAuthNotice({ kind: 'pending', message: 'If an account exists for that address, we have sent a password reset link.' }); }
+  }
+
+  async function saveNewPassword(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get('new_password') || '');
+    if (password.length < 8 || password !== form.get('confirm_password')) { setToast('Use at least 8 characters and make sure both passwords match.'); return; }
+    setSigning(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setSigning(false);
+    if (error) setToast('We could not update your password. Request a fresh reset email and try again.');
+    else setAuthNotice({ kind: 'password-success', message: 'Your password has been updated.' });
   }
 
   async function addTenant(event) {
@@ -375,6 +456,7 @@ function App() {
         name: form.get('name'), address: form.get('address') || null, city: form.get('city') || null,
         state: form.get('state') || null, country: form.get('country') || 'Nigeria',
         listing_type: form.get('listing_type'), price: Number(form.get('price')), bedrooms: Number(form.get('bedrooms') || 0),
+        property_type: form.get('property_type') || 'Residential', amenities: String(form.get('amenities') || '').split(',').map((value) => value.trim()).filter(Boolean),
         bathrooms: Number(form.get('bathrooms') || 0), description: form.get('description') || null,
         image_url: photoUrls[0] || null, image_urls: photoUrls, status: 'available', is_advertised: form.get('is_advertised') === 'on',
       };
@@ -431,6 +513,38 @@ function App() {
     setToast(nextValue ? 'Property added to dashboard advertisements.' : 'Property advertisement removed from dashboard.');
   }
 
+  async function requestListingVerification(property) {
+    if (!auth || !supabase) return;
+    const { error } = await supabase.from('properties').update({ verification_status: 'pending' }).eq('owner_id', auth.id).eq('id', property.id).neq('verification_status', 'verified');
+    if (error) { setToast(error.message); return; }
+    setPropertyRecords((current) => current.map((item) => item.id === property.id ? { ...item, verification_status: item.verification_status === 'verified' ? 'verified' : 'pending' } : item));
+    setToast('Verification request noted. The Yemilaz team will review ownership documents separately.');
+  }
+
+  async function updateViewingStatus(request, status) {
+    if (!auth || !supabase) return;
+    const { error } = await supabase.from('property_viewing_requests').update({ status }).eq('owner_id', auth.id).eq('id', request.id);
+    if (error) { setToast(error.message); return; }
+    setRecords((current) => current.map((item) => item.id === request.id ? { ...item, status } : item));
+  }
+
+  async function updateListingReport(report, status) {
+    if (!auth || !supabase) return;
+    const { error } = await supabase.from('property_listing_reports').update({ status }).eq('owner_id', auth.id).eq('id', report.id);
+    if (error) { setToast(error.message); return; }
+    setRecords((current) => current.map((item) => item.id === report.id ? { ...item, status } : item));
+  }
+
+  async function updatePropertyStatus(property, status) {
+    const tenant = tenants.find((item) => item.property_id === property.id);
+    if (tenant && status !== 'occupied') { setToast('Remove or change this tenant allocation before changing the property status.'); return; }
+    if (!tenant && status === 'occupied') { setToast('Register and allocate a tenant to mark this property as rented.'); return; }
+    const isAdvertised = status === 'reserved' ? property.is_advertised : status === 'available' ? property.is_advertised : false;
+    const { error } = await supabase.from('properties').update({ status, is_advertised: isAdvertised }).eq('owner_id', auth.id).eq('id', property.id);
+    if (error) { setToast(error.message); return; }
+    setPropertyRecords((current) => current.map((item) => item.id === property.id ? { ...item, status, is_advertised: isAdvertised } : item));
+  }
+
   async function allocateProperty(event) {
     event.preventDefault();
     if (!auth || !supabase || !allocationTenant) { setToast('Sign in before allocating a property.'); return; }
@@ -453,27 +567,34 @@ function App() {
   const visiblePayments = paymentRecords.filter((payment) => `${payment.description} ${payment.category} ${tenants.find((tenant) => tenant.id === payment.tenant_id)?.full_name || ''}`.toLowerCase().includes(query.toLowerCase()));
   const displayedTenants = visibleTenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase()));
   const dashboardAds = propertyRecords.filter((property) => property.status === 'available' && property.is_advertised);
+  const publicListings = propertyRecords.filter((property) => ['available','reserved'].includes(property.status) && property.is_advertised);
 
   async function submitComplaint(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
     if (!supabase) { setToast('Complaint submissions are temporarily unavailable. Please try again later.'); return; }
     const form = new FormData(formElement);
-    const { error } = await supabase.from('property_complaints').insert({
+    const complaint = {
       complainant_name: form.get('name'), email: form.get('email'), phone: form.get('phone') || null,
-      stakeholder_role: form.get('role'), property_address: form.get('property'), category: form.get('category'),
+      stakeholder_role: form.get('role'), property_id: form.get('property_id') || null, property_address: form.get('property'), category: form.get('category'),
+      other_participant_email: form.get('other_participant_email') || null,
       subject: form.get('subject'), details: form.get('details'),
-    });
+    };
+    const insertQuery = supabase.from('property_complaints').insert(complaint);
+    const { data, error } = auth ? await insertQuery.select().single() : await insertQuery;
     if (error) { setToast('We could not submit your complaint. Please try again.'); return; }
+    if (data && accountRole === 'stakeholder') setStakeholderCases((current) => [data, ...current]);
     formElement.reset(); setToast('Your complaint has been submitted securely. Our team will review it.');
   }
 
   if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/>
-    {showComplaintRoom ? <PublicComplaintRoom onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={dashboardAds} onSignIn={() => setAuthModal(true)} onComplaint={() => setShowComplaintRoom(true)}/>}
-    {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onClose={() => setAuthModal(false)} signing={signing}/>}
-    {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} signing={signing}/>}
+    {showComplaintRoom ? <PublicComplaintRoom properties={dashboardAds} onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={publicListings} onSignIn={() => setAuthModal(true)} onComplaint={() => setShowComplaintRoom(true)}/>}
+    {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onForgotPassword={requestPasswordReset} onClose={() => setAuthModal(false)} signing={signing}/>}
+    {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
+
+  if (accountRole === 'stakeholder') return <StakeholderPortal auth={auth} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} properties={propertyRecords} onSubmitComplaint={submitComplaint} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')}/>;
 
   return <>
     <div className={`app-shell theme-${landlordProfile?.brand_template || 'jade'}`}>
@@ -481,7 +602,7 @@ function App() {
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
         <div className="brand"><BrandLockup name={landlordProfile?.business_name || 'Yemilaz Properties'} logo={landlordProfile?.brand_logo || 'horizon'} className="workspace-brand"/><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
         <div className="workspace-pill"><div className="workspace-avatar">{initials(landlordProfile?.business_name || 'Y')}</div><span>{landlordProfile?.business_name || 'Landlord workspace'}</span><ChevronDown size={15}/></div>
-        <div className="side-scroll">{[...nav, ...(isPlatformAdmin ? [{ title: 'Administration', links: [['Landlord access', KeyRound]] }] : [])].map((group) => <div className="nav-group" key={group.title}><span className="nav-label">{group.title}</span>{group.links.map(([label, Icon]) => <button key={label} className={`nav-link ${page === label ? 'selected' : ''}`} onClick={() => { setPage(label); setMenu(false); }}><Icon size={18}/>{label}{label === 'Tenants' && <span className="nav-count">{auth ? tenants.length : demoTenants.length}</span>}</button>)}</div>)}</div>
+        <div className="side-scroll">{[...nav, ...(isPlatformAdmin ? [{ title: 'Administration', links: [['Landlord access', KeyRound], ['Listing verification', ShieldCheck]] }] : [])].map((group) => <div className="nav-group" key={group.title}><span className="nav-label">{group.title}</span>{group.links.map(([label, Icon]) => <button key={label} className={`nav-link ${page === label ? 'selected' : ''}`} onClick={() => { setPage(label); setMenu(false); }}><Icon size={18}/>{label}{label === 'Tenants' && <span className="nav-count">{auth ? tenants.length : demoTenants.length}</span>}</button>)}</div>)}</div>
         <div className="sidebar-bottom"><div className="upgrade-card"><Sparkles size={16}/><b>Property insights</b><p>See what’s happening across your portfolio.</p><button onClick={() => setToast('Insights are coming soon')}>Explore insights <ArrowRight size={14}/></button></div><div className="profile-row"><div className="profile-avatar">{auth ? initials(auth.email || 'YA') : 'YA'}</div><div><b>{auth?.email || 'Yemilaz Admin'}</b><small>{auth ? 'Property manager' : 'Preview workspace'}</small></div>{auth && <button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button>}</div></div>
       </aside>
 
@@ -494,10 +615,14 @@ function App() {
             <div className="right-column"><div className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">THE LATEST</span><h2>Portfolio reminders</h2></div></div><div className="activity-list"><Activity icon={Check} tone="green" title="Properties ready to advertise" text={`${dashboardAds.length} available properties featured`} time="Dashboard listings"/><Activity icon={FileText} tone="purple" title="Payment records" text={`${paymentRecords.length} rent and service records`} time="Payments & charges"/><Activity icon={CalendarDays} tone="orange" title="Tenant allocations" text={`${tenants.filter((tenant) => tenant.property_id).length} properties allocated`} time="Tenant directory"/></div><button className="activity-link" onClick={() => setPage('Payments & charges')}>View payments <ArrowRight size={14}/></button></div><div className="reminder-card"><div className="reminder-icon"><Building2 size={17}/></div><div><span className="eyebrow">AVAILABLE LISTINGS</span><h3>{availableProperties.length} unallocated properties</h3><p>Advertise an available property from Properties.</p></div><ArrowUpRight className="reminder-arrow" size={17}/></div></div>
           </section>
           <section className="listings-section"><div className="listings-heading"><div><span className="eyebrow">AVAILABLE TO RENT OR BUY</span><h2>Dashboard advertisements</h2></div><button className="text-button" onClick={() => setPage('Properties')}>Manage properties <ArrowRight size={15}/></button></div>{dashboardAds.length ? <div className="property-grid">{dashboardAds.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="empty-management"><span><Building2 size={23}/></span><h3>No advertised properties yet</h3><p>Add an available property, then choose “Advertise” in Properties to show it here.</p><button className="secondary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setPage('Properties'); setModal(true); }}><Plus size={15}/> Add a property</button></div>}</section>
-        </> : page === 'Landlord profile' ? <LandlordProfilePage profile={landlordProfile} email={auth.email} onSave={saveLandlordProfile} saving={saving}/> : page === 'Landlord access' && isPlatformAdmin ? <PlatformAccessPage client={supabase}/> : <ManagementPage
+        </> : page === 'Landlord profile' ? <LandlordProfilePage profile={landlordProfile} email={auth.email} onSave={saveLandlordProfile} saving={saving}/> : page === 'Landlord access' && isPlatformAdmin ? <PlatformAccessPage client={supabase}/> : page === 'Listing verification' && isPlatformAdmin ? <ListingVerificationPage client={supabase}/> : page === 'Complaints' ? showComplaintRoom ? <PublicComplaintRoom properties={propertyRecords} tenants={tenants} roleDefault="Landlord" onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <ComplaintInbox records={records} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} currentUserId={auth.id} onNew={() => setShowComplaintRoom(true)}/> : <ManagementPage
           page={page} tenants={visibleTenants} records={page === 'Properties' ? propertyRecords : page === 'Payments & charges' ? visiblePayments : records}
           query={query} setQuery={setQuery} openModal={() => { if (!auth) { setAuthModal(true); return; } setModal(true); }}
           onDeleteProperty={deleteProperty} onToggleAdvertisement={toggleAdvertisement}
+          onRequestVerification={requestListingVerification}
+          onUpdateViewingStatus={updateViewingStatus}
+          onUpdateListingReport={updateListingReport}
+          onUpdatePropertyStatus={updatePropertyStatus}
           onAllocate={(tenant) => { if (!auth) { setAuthModal(true); return; } setAllocationTenant(tenant); }}
           onRecordPayment={() => setPage('Payments & charges')} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant}
           onDownloadPdfs={downloadTenantPdfs} downloadingTenant={downloadingTenant} hasPaid={paidForTenant}
@@ -526,11 +651,11 @@ function App() {
         <label>Notes<input name="notes" placeholder="Unit, references or other details"/></label>
       </> : page === 'Properties' ? <>
         <label>Property name<input required name="name" placeholder="e.g. Meridian Residence"/></label>
-        <div className="form-row"><label>Listing type<select name="listing_type"><option value="rent">For rent</option><option value="sale">For sale</option></select></label><label>Price (₦)<input required name="price" type="number" min="0"/></label></div>
+        <div className="form-row"><label>Property type<select name="property_type"><option>Residential</option><option>Apartment</option><option>House</option><option>Land</option><option>Commercial</option><option>Short stay</option></select></label><label>Listing type<select name="listing_type"><option value="rent">For rent</option><option value="sale">For sale</option></select></label></div><label>Price (₦)<input required name="price" type="number" min="0"/></label>
         <label>Street address<input name="address" placeholder="House number and street"/></label>
         <LocationFields />
         <div className="form-row"><label>Bedrooms<input name="bedrooms" type="number" min="0"/></label><label>Bathrooms<input name="bathrooms" type="number" min="0"/></label></div>
-        <label>Property photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple/><small>Upload up to 5 JPG, PNG or WebP photos, maximum 5 MB each. Your first photo appears as the cover image.</small></label><label>Description<textarea name="description" rows="3"/></label>
+        <label>Property photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple/><small>Upload up to 5 JPG, PNG or WebP photos, maximum 5 MB each. Use clear, current photos and avoid personal or identifying information.</small></label><label>Amenities<input name="amenities" placeholder="Parking, generator, security, garden"/><small>Separate amenities with commas.</small></label><label>Description<textarea name="description" rows="3"/></label>
         <label className="checkbox-row"><input type="checkbox" name="is_advertised" defaultChecked/> Advertise on the dashboard while available</label>
       </> : page === 'Payments & charges' ? <>
         <label>Payment / charge description<input required name="description" placeholder="e.g. January rent or generator servicing"/></label>
@@ -547,34 +672,110 @@ function App() {
 
     {allocationTenant && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAllocationTenant(null)}><form className="modal" onSubmit={allocateProperty}><div className="modal-heading"><div><span className="eyebrow">PROPERTY ALLOCATION</span><h2>{allocationTenant.property_id ? 'Change tenant property' : 'Allocate a property'}</h2><p>{allocationTenant.full_name} · allocation is available after a rent or deposit payment is recorded.</p></div><button type="button" className="icon-button" onClick={() => setAllocationTenant(null)}><X size={19}/></button></div><label>Available property<select required name="property_id" defaultValue=""><option value="">Select a property</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select></label>{!paidForTenant(allocationTenant.id) && <p className="setup-note">Record a paid rent or deposit under Payments & charges before allocating a property.</p>}<div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setAllocationTenant(null)}>Cancel</button><button className="primary-button" disabled={saving || !paidForTenant(allocationTenant.id)}>Allocate property</button></div></form></div>}
 
-    {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} signing={signing}/>}
+    {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </>;
 }
 
 function PublicLanding({ properties, onSignIn, onComplaint }) {
+  const [filters, setFilters] = useState({ country: '', state: '', city: '', listing_type: '', property_type: '', min: '', max: '' });
+  const [mapMode, setMapMode] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [leadMode, setLeadMode] = useState('');
+  const [leadMessage, setLeadMessage] = useState('');
+  const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('yemilaz-favourites') || '[]'); } catch { return []; } });
+  useEffect(() => {
+    const propertyId = new URLSearchParams(window.location.search).get('property');
+    if (propertyId) setSelected(properties.find((item) => item.id === propertyId) || null);
+  }, [properties]);
+  const openProperty = (property) => {
+    setSelected(property);
+    const url = new URL(window.location.href); url.searchParams.set('property', property.id);
+    window.history.replaceState({}, '', url);
+  };
+  const closeProperty = () => {
+    setSelected(null);
+    const url = new URL(window.location.href); url.searchParams.delete('property');
+    window.history.replaceState({}, '', url);
+  };
+  const cities = [...new Set(properties.map((item) => item.city).filter(Boolean))].sort();
+  const states = [...new Set(properties.map((item) => item.state).filter(Boolean))].sort();
+  const countries = [...new Set(properties.map((item) => item.country).filter(Boolean))].sort();
+  const filtered = properties.filter((item) => (!filters.country || item.country === filters.country)
+    && (!filters.state || item.state === filters.state) && (!filters.city || item.city === filters.city)
+    && (!filters.listing_type || item.listing_type === filters.listing_type)
+    && (!filters.property_type || item.property_type === filters.property_type)
+    && (!filters.min || Number(item.price) >= Number(filters.min)) && (!filters.max || Number(item.price) <= Number(filters.max)));
+  const mapQuery = [filters.city, filters.state, filters.country].filter(Boolean).join(', ') || filtered.map((item) => [item.city, item.state, item.country].filter(Boolean).join(', ')).join(' | ');
+  const toggleFavourite = (propertyId) => setFavourites((current) => {
+    const next = current.includes(propertyId) ? current.filter((id) => id !== propertyId) : [...current, propertyId];
+    localStorage.setItem('yemilaz-favourites', JSON.stringify(next)); return next;
+  });
+  useEffect(() => {
+    const title = selected ? `${selected.name} in ${selected.city || selected.state || selected.country} | Yemilaz Properties` : 'Yemilaz Properties | Find your place';
+    document.title = title;
+    let description = document.querySelector('meta[name="description"]');
+    if (!description) { description = document.createElement('meta'); description.name = 'description'; document.head.append(description); }
+    description.content = selected?.description || 'Browse thoughtfully selected homes to rent or buy across Nigeria and beyond with Yemilaz Properties.';
+    for (const [property, content] of [['og:title', title], ['og:description', description.content], ['og:image', selected?.image_url ? new URL(selected.image_url, window.location.origin).href : new URL('/lagos-home.png', window.location.origin).href]]) {
+      let tag = document.querySelector(`meta[property="${property}"]`);
+      if (!tag) { tag = document.createElement('meta'); tag.setAttribute('property', property); document.head.append(tag); }
+      tag.content = content;
+    }
+    if (selected && supabase) {
+      const key = `listing-view:${selected.id}`;
+      if (!sessionStorage.getItem(key)) { sessionStorage.setItem(key, '1'); supabase.rpc('record_property_listing_view', { p_property_id: selected.id }); }
+    }
+    return () => { document.title = 'Yemilaz Properties | Find your place'; };
+  }, [selected]);
+  async function submitListingLead(event) {
+    event.preventDefault();
+    if (!supabase || !selected) return;
+    const form = new FormData(event.currentTarget);
+    const table = leadMode === 'viewing' ? 'property_viewing_requests' : leadMode === 'report' ? 'property_listing_reports' : 'property_enquiries';
+    const row = leadMode === 'report'
+      ? { property_id: selected.id, owner_id: selected.owner_id, reporter_email: form.get('email') || null, reason: form.get('reason'), details: form.get('details') || null }
+      : leadMode === 'viewing'
+        ? { property_id: selected.id, owner_id: selected.owner_id, name: form.get('name'), email: form.get('email'), phone: form.get('phone') || null, requested_at: new Date(form.get('requested_at')).toISOString(), note: form.get('message') || null }
+        : { property_id: selected.id, owner_id: selected.owner_id, name: form.get('name'), email: form.get('email'), phone: form.get('phone') || null, message: form.get('message') };
+    const { error } = await supabase.from(table).insert(row);
+    if (error) { setLeadMessage('We could not submit your request. Please try again later.'); return; }
+    setLeadMessage(leadMode === 'report' ? 'Thank you. Our team will review this report.' : 'Your request was added to the property manager’s private inbox.');
+    setLeadMode('');
+  }
   return <div className="public-site">
-    <header className="public-nav"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><nav><a href="#homes">Find a home</a><a href="#about">About us</a><button className="public-text-button" onClick={onComplaint}>Complaint room</button><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
+    <header className="public-nav"><a className="public-brand" href="#top" aria-label="Yemilaz Properties home"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><nav aria-label="Main navigation"><a href="#homes">Find a home</a><a href="#about">About us</a><a href="#support">Help &amp; policies</a><button className="public-text-button" onClick={onComplaint}>Complaint room</button><button className="sign-in" onClick={onSignIn}><KeyRound size={15}/> Manager sign in</button></nav></header>
     <main id="top">
       <section className="public-hero"><div className="public-hero-copy"><span className="public-eyebrow"><i/> THOUGHTFUL LIVING IN NIGERIA &amp; BEYOND</span><h1>Find a place<br/>to <em>call yours.</em></h1><p>Considered homes and dependable property care, in Nigeria and around the world.</p><div className="public-hero-actions"><a className="primary-button" href="#homes">Explore available homes <ArrowRight size={16}/></a><button className="public-text-button" onClick={onSignIn}>Property manager? Sign in</button></div><div className="public-trust"><span><Check size={14}/> Carefully selected homes</span><span><Check size={14}/> Personal service</span></div></div><div className="public-hero-photo"><img src="/lagos-home.png" alt="A contemporary home in Lagos"/><div className="hero-photo-note"><span className="live-dot"/> YEMILAZ PROPERTIES <b>Homes for a better everyday.</b></div></div></section>
-      <section className="public-listings" id="homes"><div className="public-section-heading"><div><span className="public-eyebrow">THE CURRENT COLLECTION</span><h2>Homes worth coming home to.</h2><p>Browse properties currently available to rent or buy.</p></div><span className="public-count">{properties.length} {properties.length === 1 ? 'home' : 'homes'} available</span></div>{properties.length ? <div className="property-grid">{properties.map((property) => <PropertyCard key={property.id} property={property}/>)}</div> : <div className="public-empty"><Building2 size={25}/><h3>New homes are on the way.</h3><p>Check back soon for available Yemilaz Properties listings.</p></div>}</section>
-      <section className="public-about" id="about"><div><span className="public-eyebrow">PROPERTY, MADE PERSONAL</span><h2>Good homes.<br/>Thoughtful care.</h2></div><p>From discovering your next home to keeping every detail in order, Yemilaz Properties brings people and places together with clarity, care and local expertise.</p><button className="about-signin" onClick={onSignIn}>Property manager sign in <ArrowUpRight size={15}/></button></section>
+      <section className="public-listings" id="homes"><div className="public-section-heading"><div><span className="public-eyebrow">THE CURRENT COLLECTION</span><h2>Homes worth coming home to.</h2><p>Browse homes by location, budget and type. Reserved listings are marked clearly. Fees and terms are confirmed with the listing manager before any commitment.</p></div><span className="public-count">{filtered.length} advertised {filtered.length === 1 ? 'listing' : 'listings'}</span></div>
+        <div className="listing-filters" role="search" aria-label="Filter property listings">{[['country','Country',countries],['state','State',states],['city','City',cities],['listing_type','Rent or sale',['rent','sale']],['property_type','Property type',[...new Set(properties.map((item) => item.property_type).filter(Boolean))]]].map(([key,label,options]) => <label key={key}>{label}<select aria-label={label} value={filters[key]} onChange={(event) => setFilters((value) => ({ ...value, [key]: event.target.value }))}><option value="">All</option>{options.map((option) => <option key={option} value={option}>{key === 'listing_type' ? option === 'rent' ? 'For rent' : 'For sale' : option}</option>)}</select></label>)}<label>Min price<input aria-label="Minimum price" inputMode="numeric" type="number" min="0" value={filters.min} onChange={(event) => setFilters((value) => ({ ...value, min: event.target.value }))}/></label><label>Max price<input aria-label="Maximum price" inputMode="numeric" type="number" min="0" value={filters.max} onChange={(event) => setFilters((value) => ({ ...value, max: event.target.value }))}/></label><button className="secondary-button" onClick={() => setFilters({ country:'',state:'',city:'',listing_type:'',property_type:'',min:'',max:'' })}>Clear filters</button></div>
+        <div className="listing-view-tools"><span>{favourites.length} saved {favourites.length === 1 ? 'home' : 'homes'}</span><button className="secondary-button" onClick={() => setMapMode((value) => !value)}><MapPin size={15}/>{mapMode ? 'Hide map' : 'Browse map'}</button></div>
+        {mapMode && mapQuery && <iframe className="listing-map" title="Map of matching property locations" loading="lazy" src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed`}/>}
+        {filtered.length ? <div className="property-grid">{filtered.map((property) => <PropertyCard key={property.id} property={property} onOpen={() => openProperty(property)} isFavourite={favourites.includes(property.id)} onFavourite={() => toggleFavourite(property.id)}/>)}</div> : <div className="public-empty"><Building2 size={25}/><h3>No homes match those filters.</h3><p>Try broadening your search or clear the filters.</p></div>}</section>
+      <section className="public-about" id="about"><div><span className="public-eyebrow">PROPERTY, MADE PERSONAL</span><h2>Good homes.<br/>Thoughtful care.</h2></div><p>Yemilaz Properties brings landlords, tenants and trusted property professionals together with clarity, care and local expertise.</p><button className="about-signin" onClick={onSignIn}>Property manager sign in <ArrowUpRight size={15}/></button></section>
+      <section className="public-support" id="support"><h2>Help, policies &amp; support</h2><div className="support-grid"><article><h3>Fees and payment terms</h3><p>Listing prices are shown as provided by the property manager. Confirm deposits, agency fees, service charges, payment deadlines, refund terms, and payee details in writing before paying. Yemilaz Properties does not collect listing payments on this page.</p></article><article id="tenancy-safety"><h3>Tenancy and safety</h3><p>Inspect a property, verify who is authorized to let it, review the tenancy agreement, and obtain receipts for every payment. For urgent safety issues, contact local emergency services first, then notify the property manager.</p></article><article id="privacy-policy"><h3>Privacy notice</h3><p>We use the details you submit to respond to enquiries, viewing requests, and complaints. Complaint conversations are visible only to participants linked to the case. Contact <a href="mailto:hello@yemilazproperties.com">hello@yemilazproperties.com</a> for privacy questions or a data request.</p></article><article id="terms-of-use"><h3>Website terms</h3><p>Listing information is supplied by property managers and should be independently verified. A website enquiry is not a tenancy agreement or payment instruction. Confirm all terms and parties in writing before making a commitment.</p></article><article><h3>Contact support</h3><p>Questions or concerns? Email <a href="mailto:hello@yemilazproperties.com">hello@yemilazproperties.com</a> or use our <button className="inline-link" onClick={onComplaint}>complaint room</button>.</p></article></div><details><summary>Frequently asked questions</summary><h3>Are listings verified?</h3><p>Look for a Yemilaz verification badge. A badge indicates documents were reviewed; always inspect the property and confirm the terms directly.</p><h3>How do I arrange a viewing?</h3><p>Open a listing and submit a viewing request. The listing manager can confirm the date in their workspace.</p><h3>Can I pay Yemilaz through this site?</h3><p>No. Do not send money through this website. Confirm payment details directly with the verified property manager and request a receipt.</p></details></section>
     </main>
-    <footer className="public-footer"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><button className="public-text-button" onClick={onComplaint}>Lodge a property complaint</button><span>Thoughtful living, beautifully managed.</span><span>© {new Date().getFullYear()} Yemilaz Properties</span></footer>
+    <footer className="public-footer"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><button className="public-text-button" onClick={onComplaint}>Lodge a property complaint</button><a href="mailto:hello@yemilazproperties.com">Contact support</a><span>© {new Date().getFullYear()} Yemilaz Properties</span></footer>
+    {selected && <div className="modal-backdrop listing-detail-backdrop" onMouseDown={(event) => event.target === event.currentTarget && (closeProperty(), setLeadMode(''))}><section className="modal listing-detail" role="dialog" aria-modal="true" aria-labelledby="listing-detail-title"><div className="modal-heading"><div><span className="eyebrow">{selected.property_type || 'RESIDENTIAL'} · {selected.listing_type === 'sale' ? 'FOR SALE' : 'FOR RENT'}</span><h2 id="listing-detail-title">{selected.name}</h2><p><MapPin size={13}/>{[selected.address,selected.city,selected.state,selected.country].filter(Boolean).join(', ')}</p></div><button className="icon-button" aria-label="Close property details" onClick={closeProperty}><X size={18}/></button></div><PropertyGallery property={selected}/><div className="detail-price"><b>{currency(selected.price)}</b><span>{selected.listing_type === 'rent' ? '/ year' : ' asking price'}</span></div><p className="fee-note">Before paying, confirm all agency fees, deposits, service charges, payment dates, and refund terms directly with the listing manager.</p><div className="property-features"><span><BedDouble size={15}/>{selected.bedrooms || 0} beds</span><span><Home size={14}/>{selected.bathrooms || 0} baths</span><span>{selected.status === 'occupied' ? 'Rented' : selected.status === 'reserved' || selected.status === 'under_offer' ? 'Reserved' : selected.status === 'sold' ? 'Sold' : 'Available'}</span></div><p className="listing-description">{selected.description || 'Contact the listing manager for more details.'}</p>{(selected.amenities || []).length > 0 && <div><b>Amenities</b><div className="amenity-list">{selected.amenities.map((amenity) => <span key={amenity}>{amenity}</span>)}</div></div>}<div className="listing-actions">{selected.status === 'available' ? <><button className="primary-button" onClick={() => setLeadMode('enquiry')}>Enquire</button><button className="secondary-button" onClick={() => setLeadMode('viewing')}>Request viewing</button></> : <b className="listing-status-note">Reserved · enquire with the manager about availability</b>}<button className="text-button" onClick={() => setLeadMode('report')}>Report this listing</button><button className="secondary-button" onClick={() => navigator.clipboard?.writeText(window.location.href)}>Copy listing link</button><a className="secondary-button" target="_blank" rel="noreferrer" href={`https://maps.google.com/?q=${encodeURIComponent([selected.address,selected.city,selected.state,selected.country].filter(Boolean).join(', '))}`}><MapPin size={14}/> Map</a></div>
+      {leadMessage && <p className="lead-feedback" role="status">{leadMessage}</p>}{leadMode && <form className="listing-lead-form" onSubmit={submitListingLead}><h3>{leadMode === 'report' ? 'Report a listing' : leadMode === 'viewing' ? 'Request a viewing' : 'Send an enquiry'}</h3>{leadMode !== 'report' && <div className="form-row"><label>Your name<input required name="name" autoComplete="name"/></label><label>Email<input required name="email" type="email" autoComplete="email"/></label></div>}{leadMode === 'report' && <><label>Your email (optional)<input name="email" type="email"/></label><label>Reason<select required name="reason"><option value="">Choose a reason</option><option>Incorrect information</option><option>Suspicious or fraudulent</option><option>Already rented or sold</option><option>Inappropriate content</option><option>Other</option></select></label></>}{leadMode !== 'report' && <label>Phone <small>Optional</small><input name="phone" type="tel" autoComplete="tel"/></label>}{leadMode === 'viewing' && <label>Preferred date and time<input required name="requested_at" type="datetime-local" min={new Date().toISOString().slice(0,16)}/></label>}<label>{leadMode === 'report' ? 'Details (optional)' : leadMode === 'viewing' ? 'Note (optional)' : 'Message'}<textarea name={leadMode === 'report' ? 'details' : 'message'} required={leadMode === 'enquiry'} rows="3" maxLength="2000"/></label><button className="primary-button" disabled={!supabase}>{supabase ? 'Send request' : 'Service unavailable'}</button></form>}</section></div>}
   </div>;
 }
 
-function PublicComplaintRoom({ onBack, onSubmit }) {
-  return <div className="public-site complaint-site"><header className="public-nav"><button className="public-brand complaint-back" onClick={onBack}><BrandLockup name="Yemilaz Properties" logo="horizon"/></button><button className="sign-in" onClick={onBack}>Back to homes</button></header><main className="complaint-main"><div className="complaint-intro"><span className="public-eyebrow">A SHARED SPACE FOR PROPERTY CONCERNS</span><h1>Complaint room</h1><p>Landlords, tenants, agents, caretakers and anyone involved with a property can raise an issue here. Share the details and our team will follow up.</p></div><form className="panel complaint-form" onSubmit={onSubmit}><div className="form-row"><label>Your full name<input required name="name" autoComplete="name"/></label><label>Email address<input required name="email" type="email" autoComplete="email"/></label></div><div className="form-row"><label>Phone number <small>(optional)</small><input name="phone" type="tel" autoComplete="tel"/></label><label>Your role<select required name="role" defaultValue=""><option value="" disabled>Select your connection</option><option>Landlord</option><option>Tenant</option><option>Agent</option><option>Caretaker</option><option>Buyer or seller</option><option>Other</option></select></label></div><label>Property address or name<input required name="property" placeholder="Address, building or listing name"/></label><div className="form-row"><label>Issue type<select required name="category" defaultValue=""><option value="" disabled>Select a category</option><option>Repairs and maintenance</option><option>Rent or payment</option><option>Property access</option><option>Conduct or safety</option><option>Agreement or documentation</option><option>Other</option></select></label><label>Complaint subject<input required name="subject" maxLength="120"/></label></div><label>What happened?<textarea required name="details" rows="6" maxLength="5000" placeholder="Include relevant dates and what outcome you are seeking."/></label><p className="complaint-privacy">Your contact details and complaint will be shared only with the Yemilaz Properties team for follow-up.</p><button className="primary-button" type="submit"><FileText size={16}/> Submit complaint</button></form></main><footer className="public-footer"><span>© {new Date().getFullYear()} Yemilaz Properties</span><span>We’ll handle your concern with care.</span></footer></div>;
+function PublicComplaintRoom({ properties, tenants = [], roleDefault = '', onBack, onSubmit }) {
+  const [role, setRole] = useState(roleDefault);
+  const [propertyId, setPropertyId] = useState('');
+  return <div className="public-site complaint-site"><header className="public-nav"><button className="public-brand complaint-back" onClick={onBack}><BrandLockup name="Yemilaz Properties" logo="horizon"/></button><button className="sign-in" onClick={onBack}>Back to homes</button></header><main className="complaint-main"><div className="complaint-intro"><span className="public-eyebrow">A SHARED SPACE FOR PROPERTY CONCERNS</span><h1>Complaint room</h1><p>Landlords and tenants can open a case and continue the conversation in their private account. Create or sign in to a Tenant or complainant account before lodging if you need ongoing chat and two-party resolution approval.</p></div><form className="panel complaint-form" onSubmit={onSubmit}><div className="form-row"><label>Your full name<input required name="name" autoComplete="name"/></label><label>Email address<input required name="email" type="email" autoComplete="email"/></label></div><div className="form-row"><label>Phone number <small>(optional)</small><input name="phone" type="tel" autoComplete="tel"/></label><label>Your role<select required name="role" value={role} onChange={(event) => setRole(event.target.value)}><option value="">Select your connection</option><option>Landlord</option><option>Tenant</option><option>Agent</option><option>Caretaker</option><option>Buyer or seller</option><option>Other</option></select></label></div><label>Link an advertised property<select name="property_id" value={propertyId} required={role === 'Landlord' || role === 'Tenant'} onChange={(event) => setPropertyId(event.target.value)}><option value="">Not listed / enter address below</option>{properties.map((item) => <option key={item.id} value={item.id}>{item.name} · {[item.city,item.state].filter(Boolean).join(', ')}</option>)}</select></label>{role === 'Landlord' && tenants.length > 0 && <label>Tenant involved<select name="other_participant_email" required={role === 'Landlord'} defaultValue=""><option value="">Choose a tenant</option>{tenants.filter((tenant) => tenant.email && (!propertyId || tenant.property_id === propertyId)).map((tenant) => <option key={tenant.id} value={tenant.email}>{tenant.full_name} · {tenant.email}</option>)}</select><small>They can join the conversation after creating a complaint account with this email address.</small></label>}<label>Property address or name<input required name="property" placeholder="Address, building or listing name"/></label><div className="form-row"><label>Issue type<select required name="category" defaultValue=""><option value="" disabled>Select a category</option><option>Repairs and maintenance</option><option>Rent or payment</option><option>Property access</option><option>Conduct or safety</option><option>Agreement or documentation</option><option>Other</option></select></label><label>Complaint subject<input required name="subject" maxLength="120"/></label></div><label>What happened?<textarea required name="details" rows="6" maxLength="5000" placeholder="Include relevant dates and what outcome you are seeking."/></label><p className="complaint-privacy">Complaints linked to a listed property appear in the manager’s private inbox. Anonymous submissions are intake only; sign in to continue the conversation.</p><button className="primary-button" type="submit"><FileText size={16}/> Submit complaint</button></form></main><footer className="public-footer"><span>© {new Date().getFullYear()} Yemilaz Properties</span><span>We’ll handle your concern with care.</span></footer></div>;
 }
 
-function AuthDialog({ onSubmit, onSignUp, onClose, signing }) {
+function AuthDialog({ onSubmit, onSignUp, onForgotPassword, onClose, signing }) {
   const [createAccount, setCreateAccount] = useState(false);
-  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? 'Create landlord profile' : 'Manager sign in'}</h2><p>{createAccount ? 'Create a private workspace for your own properties and tenants.' : 'Sign in to manage your private properties, tenants and payments.'}</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>{createAccount && <><label>Your full name<input required name="full_name" autoComplete="name"/></label><BrandingFields defaultBusinessName=""/><label>Yemilaz Properties access code<input required name="invite_code" autoComplete="one-time-code" placeholder="Enter your one-time invitation code"/><small>Ask the platform administrator for a current code. It can be used once and expires automatically.</small></label></>}<label>Email address<input required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><button type="button" className="auth-toggle" onClick={() => setCreateAccount((value) => !value)}>{createAccount ? 'Already have an account? Sign in' : 'New landlord? Create your own profile'}</button></form></div>;
+  const [role, setRole] = useState('landlord');
+  const emailRef = useRef(null);
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? role === 'landlord' ? 'Create landlord profile' : 'Create complaint account' : 'Sign in'}</h2><p>{createAccount ? role === 'landlord' ? 'Create a private workspace for properties and tenants.' : 'Create an account to follow and reply to your property complaint.' : 'Access your private property workspace or complaint conversations.'}</p></div><button type="button" className="icon-button" aria-label="Close sign in" onClick={onClose}><X size={19}/></button></div>{createAccount && <><input type="hidden" name="account_role" value={role === 'landlord' ? 'landlord' : 'stakeholder'}/><label>Your full name<input required name="full_name" autoComplete="name"/></label>{role === 'landlord' ? <><BrandingFields defaultBusinessName=""/><label>Yemilaz Properties access code<input required name="invite_code" autoComplete="one-time-code" placeholder="Enter your one-time invitation code"/><small>Landlord accounts require a current administrator-issued code.</small></label></> : <p className="setup-note">Complaint accounts can access only cases you submit or are invited to participate in.</p>}</>}<label>Email address<input ref={emailRef} required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type="password" autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label>{!createAccount && <button type="button" className="auth-toggle" onClick={() => onForgotPassword(emailRef.current?.value?.trim())}>Forgot password?</button>}<div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><div className="auth-toggle-row">{createAccount ? <button type="button" className="auth-toggle" onClick={() => setCreateAccount(false)}>Already have an account? Sign in</button> : <><button type="button" className="auth-toggle" onClick={() => { setRole('landlord'); setCreateAccount(true); }}>New landlord</button><button type="button" className="auth-toggle" onClick={() => { setRole('stakeholder'); setCreateAccount(true); }}>Tenant or complainant</button></>}</div></form></div>;
 }
 
-function AuthNoticeDialog({ notice, onClose, onResend, signing }) {
-  return <div className="modal-backdrop auth-notice-backdrop"><section className="modal auth-notice-card"><div className={`auth-notice-icon ${notice.kind}`}>{notice.kind === 'error' ? <X size={24}/> : <Check size={24}/>}</div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{notice.kind === 'error' ? 'Confirmation link expired' : notice.kind === 'success' ? 'Your profile is confirmed' : 'Check your email'}</h2><p>{notice.message}</p>{notice.kind === 'error' && notice.expired && <form onSubmit={onResend}><label>Email address<input required name="email" type="email" autoComplete="email" placeholder="The address used to register"/></label><button className="primary-button" disabled={signing}>{signing ? 'Sending…' : 'Resend confirmation email'}</button></form>}<button type="button" className="secondary-button" onClick={onClose}>{notice.kind === 'success' ? 'Continue to Yemilaz Properties' : 'Close'}</button></section></div>;
+function AuthNoticeDialog({ notice, onClose, onResend, onUpdatePassword, signing }) {
+  return <div className="modal-backdrop auth-notice-backdrop"><section className="modal auth-notice-card"><div className={`auth-notice-icon ${notice.kind}`}>{notice.kind === 'error' ? <X size={24}/> : <Check size={24}/>}</div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{notice.kind === 'error' ? 'Confirmation link expired' : notice.kind === 'reset' ? 'Set a new password' : notice.kind === 'password-success' ? 'Password updated' : notice.kind === 'success' ? 'Your account is confirmed' : 'Check your email'}</h2><p>{notice.message}</p>{notice.kind === 'error' && notice.expired && <form onSubmit={onResend}><label>Email address<input required name="email" type="email" autoComplete="email" placeholder="The address used to register"/></label><button className="primary-button" disabled={signing}>{signing ? 'Sending…' : 'Resend confirmation email'}</button></form>}{notice.kind === 'reset' && <form onSubmit={onUpdatePassword}><label>New password<input required name="new_password" type="password" minLength="8" autoComplete="new-password"/></label><label>Confirm new password<input required name="confirm_password" type="password" minLength="8" autoComplete="new-password"/></label><button className="primary-button" disabled={signing}>{signing ? 'Updating…' : 'Update password'}</button></form>}<button type="button" className="secondary-button" onClick={onClose}>{notice.kind === 'success' ? 'Continue to Yemilaz Properties' : 'Close'}</button></section></div>;
 }
 
 function PlatformAccessPage({ client }) {
@@ -607,6 +808,24 @@ function PlatformAccessPage({ client }) {
     refresh();
   }
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">YEMILAZ PROPERTIES ADMINISTRATION</div><h1>Landlord access</h1><p>Create expiring, single-use codes for approved landlords. Only platform administrators can see this page.</p></div></div><div className="panel invite-panel"><h2>Generate a landlord code</h2><p>Each code works for one landlord registration, expires automatically, and can be revoked before use.</p><form className="invite-create" onSubmit={generate}><label>Code expiry<select value={hours} onChange={(event) => setHours(event.target.value)}><option value="1">1 hour</option><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></label><button className="primary-button" disabled={busy}>Generate secure code</button></form>{newCode && <div className="invite-code-result"><div><small>ONE-TIME LANDLORD CODE</small><code>{newCode}</code></div><button className="secondary-button" onClick={() => navigator.clipboard?.writeText(newCode).then(() => setMessage('Access code copied.'))}>Copy code</button></div>}{message && <p className="setup-note">{message}</p>}</div><div className="panel invite-history"><div className="panel-heading"><div><span className="eyebrow">ACCESS CONTROL</span><h2>Invitation history</h2></div><button className="secondary-button" onClick={refresh}>Refresh</button></div><div className="table-wrap"><table><thead><tr><th>CODE</th><th>STATUS</th><th>EXPIRES</th><th>USED</th><th/></tr></thead><tbody>{invites.map((invite) => <tr key={invite.invite_id}><td><code>{invite.code_hint}</code></td><td><span className={`invite-status ${invite.status}`}>{invite.status}</span></td><td>{new Date(invite.expires_at).toLocaleString()}</td><td>{invite.redeemed_at ? new Date(invite.redeemed_at).toLocaleString() : '—'}</td><td>{invite.status === 'active' && <button className="danger-button" disabled={busy} onClick={() => revoke(invite.invite_id)}>Revoke</button>}</td></tr>)}</tbody></table>{!invites.length && <div className="empty-state">No landlord invitation codes yet.</div>}</div></div></section>;
+}
+
+function ListingVerificationPage({ client }) {
+  const [properties, setProperties] = useState([]);
+  const [message, setMessage] = useState('');
+  const [busyId, setBusyId] = useState('');
+  async function refresh() {
+    const { data, error } = await client.from('properties').select('id,owner_id,name,address,city,state,country,verification_status,created_at').eq('verification_status', 'pending').order('created_at');
+    if (error) setMessage(error.message); else { setProperties(data || []); setMessage(''); }
+  }
+  useEffect(() => { refresh(); }, []);
+  async function decide(property, verification_status) {
+    setBusyId(property.id);
+    const { error } = await client.from('properties').update({ verification_status }).eq('id', property.id);
+    setBusyId('');
+    if (error) setMessage(error.message); else { setMessage(verification_status === 'verified' ? 'Listing marked verified after review.' : 'Verification request declined.'); refresh(); }
+  }
+  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">ADMIN REVIEW</div><h1>Listing verification</h1><p>Review ownership documents outside the public website, then record the decision here.</p></div><button className="secondary-button" onClick={refresh}>Refresh queue</button></div>{message && <p className="setup-note">{message}</p>}<div className="panel management-panel"><div className="table-wrap"><table><thead><tr><th>PROPERTY</th><th>ADDRESS</th><th>OWNER ID</th><th>REQUESTED</th><th>DECISION</th></tr></thead><tbody>{properties.map((property) => <tr key={property.id}><td>{property.name}</td><td>{[property.address,property.city,property.state,property.country].filter(Boolean).join(', ')}</td><td><code>{property.owner_id}</code></td><td>{new Date(property.created_at).toLocaleDateString()}</td><td><div className="row-actions"><button className="primary-button compact-button" disabled={busyId === property.id} onClick={() => decide(property,'verified')}>Verify</button><button className="danger-button" disabled={busyId === property.id} onClick={() => decide(property,'rejected')}>Decline</button></div></td></tr>)}</tbody></table>{!properties.length && <EmptyState title="No verification requests" text="New requests from property managers will appear here."/>}</div></div></section>;
 }
 
 function LandlordProfilePage({ profile, email, onSave, saving }) {
@@ -654,12 +873,28 @@ function LocationFields() {
   </div><div className="form-row"><label>City / town<input name="city" value={city} onChange={(event) => setCity(event.target.value)} placeholder="City or town"/></label><span className="location-note">{loadingStates ? 'Loading states and provinces…' : 'Choose a country to load its states or regions.'}</span></div></div>;
 }
 
-function PropertyCard({ property }) {
+function PropertyCard({ property, onOpen, isFavourite, onFavourite }) {
   const images = property.image_urls?.length ? property.image_urls : [property.image_url].filter(Boolean);
   const [photoIndex, setPhotoIndex] = useState(0);
   const cover = images[photoIndex] || '/lagos-home.png';
-  const changePhoto = (event, direction) => { event.preventDefault(); event.stopPropagation(); setPhotoIndex((current) => (current + direction + images.length) % images.length); };
-  return <article className="property-card"><div className="property-image" style={{ backgroundImage: `url(${cover})` }}><span className="property-tag">{property.listing_type === 'sale' ? 'For sale' : 'For rent'}</span>{images.length > 1 && <div className="photo-controls"><button type="button" aria-label="Previous property photo" onClick={(event) => changePhoto(event, -1)}>‹</button><span>{photoIndex + 1} / {images.length}</span><button type="button" aria-label="Next property photo" onClick={(event) => changePhoto(event, 1)}>›</button></div>}</div><div className="property-info"><span className="property-area">{[property.address, property.city, property.state, property.country].filter(Boolean).join(', ') || 'Nigeria'}</span><h3>{property.name}</h3><div className="property-features"><span><BedDouble size={15}/>{property.bedrooms || 0} beds</span><span><Home size={14}/>{property.bathrooms || 0} baths</span></div><div className="property-price"><b>{currency(property.price)}</b><span>{property.listing_type === 'rent' ? '/ year' : ''}</span><a href={`mailto:hello@yemilazproperties.com?subject=${encodeURIComponent(`Property enquiry: ${property.name}`)}`} aria-label={`Enquire about ${property.name}`}><ArrowUpRight size={16}/></a></div></div></article>;
+  const statusLabel = property.status === 'occupied' ? 'Rented' : property.status === 'reserved' || property.status === 'under_offer' ? 'Reserved' : property.status === 'sold' ? 'Sold' : 'Available';
+  return <article className="property-card"><button className="property-open" onClick={onOpen || (() => {})} aria-label={`View details for ${property.name}`}><div className="property-image" style={{ backgroundImage: `url(${cover})` }} role="img" aria-label={`${property.name} property photo`}><span className="property-tag">For {property.listing_type === 'sale' ? 'sale' : 'rent'}</span>{property.verification_status === 'verified' && <span className="verified-tag" title="Listing ownership reviewed">✓ Verified</span>}{statusLabel !== 'Available' && <span className="listing-status-tag">{statusLabel}</span>}{images.length > 1 && <span className="photo-count">{images.length} photos</span>}</div><div className="property-info"><span className="property-area">{[property.address, property.city, property.state, property.country].filter(Boolean).join(', ') || 'Nigeria'}</span><h3>{property.name}</h3><div className="property-features"><span><BedDouble size={15}/>{property.bedrooms || 0} beds</span><span><Home size={14}/>{property.bathrooms || 0} baths</span></div><div className="property-price"><b>{currency(property.price)}</b><span>{property.listing_type === 'rent' ? '/ year' : ''}</span></div></div></button>{onFavourite && <button className={`favourite-button ${isFavourite ? 'saved' : ''}`} aria-label={isFavourite ? `Remove ${property.name} from saved homes` : `Save ${property.name}`} aria-pressed={Boolean(isFavourite)} onClick={onFavourite || (() => {})}><Heart size={17} fill={isFavourite ? 'currentColor' : 'none'}/></button>}</article>;
+}
+
+function PropertyGallery({ property }) {
+  const images = property.image_urls?.length ? property.image_urls : [property.image_url].filter(Boolean);
+  const [index, setIndex] = useState(0);
+  return <div className="property-gallery"><img src={images[index] || '/lagos-home.png'} alt={`${property.name} photo ${index + 1} of ${Math.max(1, images.length)}`}/>{images.length > 1 && <div className="gallery-controls"><button type="button" aria-label="Previous image" onClick={() => setIndex((value) => (value - 1 + images.length) % images.length)}>Previous</button><span>{index + 1} / {images.length}</span><button type="button" aria-label="Next image" onClick={() => setIndex((value) => (value + 1) % images.length)}>Next</button></div>}</div>;
+}
+
+function ComplaintInbox({ records, activeComplaint, setActiveComplaint, messages, onSend, onResolution, currentUserId, onNew }) {
+  const ownProposal = activeComplaint?.resolution_proposed_by === currentUserId;
+  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">PRIVATE CASE WORKSPACE</div><h1>Complaint room</h1><p>Keep a written record of each concern. A case is resolved only after the other participant approves.</p></div>{!activeComplaint && <button className="primary-button" onClick={onNew}><Plus size={16}/> Lodge a complaint</button>}</div>{activeComplaint ? <div className="panel complaint-thread"><button className="text-button" onClick={() => setActiveComplaint(null)}>← All complaints</button><div className="panel-heading"><div><span className="eyebrow">CASE {activeComplaint.reference_code}</span><h2>{activeComplaint.subject}</h2><p>{activeComplaint.complainant_name} · {activeComplaint.property_address} · {activeComplaint.status}</p></div></div><p className="complaint-original">{activeComplaint.details}</p><div className="thread-messages">{messages.map((item) => <article className={`thread-message ${item.sender_id === currentUserId ? 'from-manager' : ''}`} key={item.id}><p>{item.message}</p><small>{item.sender_id === currentUserId ? 'You' : 'Other participant'} · {new Date(item.created_at).toLocaleString()}</small></article>)}{!messages.length && <p className="empty-state">No replies yet. Send a message to continue the conversation.</p>}</div>{activeComplaint.status !== 'resolved' && activeComplaint.status !== 'closed' && <><form className="thread-reply" onSubmit={onSend}><label htmlFor="complaint-message">Reply to this case</label><textarea id="complaint-message" name="message" required maxLength="5000" rows="3" placeholder="Write a clear, respectful reply…"/><button className="primary-button">Send reply</button></form><div className="resolution-actions">{activeComplaint.resolution_proposed_at && !ownProposal && <><button className="primary-button" onClick={() => onResolution('approve')}>Approve proposed resolution</button><button className="secondary-button" onClick={() => onResolution('rework')}>Request more work</button></>}{ownProposal && <p>Your resolution proposal is waiting for the other participant’s approval.</p>}{!activeComplaint.resolution_proposed_at && <button className="secondary-button" onClick={() => onResolution('propose')}>Propose resolution</button>}</div></>}</div> : <div className="panel management-panel"><div className="table-wrap"><table><thead><tr><th>REFERENCE</th><th>SUBJECT</th><th>COMPLAINANT</th><th>PROPERTY</th><th>STATUS</th><th>DATE</th><th/></tr></thead><tbody>{records.map((item) => <tr key={item.id}><td>{item.reference_code}</td><td>{item.subject}</td><td>{item.complainant_name}</td><td>{item.property_address}</td><td>{item.resolution_approved_at ? 'Resolved by both' : item.resolution_proposed_at ? 'Awaiting approval' : item.status}</td><td>{new Date(item.created_at).toLocaleDateString()}</td><td><button className="secondary-button compact-button" onClick={() => setActiveComplaint(item)}>Open conversation</button></td></tr>)}</tbody></table>{!records.length && <EmptyState title="No linked complaints yet" text="Complaints linked to a property in your account will appear here."/>}</div></div>}</section>;
+}
+
+function StakeholderPortal({ auth, cases, activeComplaint, setActiveComplaint, messages, onSend, onResolution, properties, onSubmitComplaint, onSignOut, toast, onClearToast }) {
+  const [newComplaint, setNewComplaint] = useState(false);
+  return <div className="brand-site theme-jade"><header className="portal-header"><BrandLockup name="Yemilaz Properties" logo="horizon"/><div><span>{auth.email}</span><button className="secondary-button" onClick={onSignOut}>Sign out</button></div></header><main className="stakeholder-portal">{newComplaint ? <><button className="text-button" onClick={() => setNewComplaint(false)}>← My complaints</button><PublicComplaintRoom properties={properties} roleDefault="Tenant" onBack={() => setNewComplaint(false)} onSubmit={async (event) => { await onSubmitComplaint(event); setNewComplaint(false); }}/></> : activeComplaint ? <div className="panel complaint-thread"><button className="text-button" onClick={() => setActiveComplaint(null)}>← My complaints</button><div className="panel-heading"><div><span className="eyebrow">CASE {activeComplaint.reference_code}</span><h2>{activeComplaint.subject}</h2><p>{activeComplaint.property_address} · {activeComplaint.resolution_approved_at ? 'Resolved by both participants' : activeComplaint.resolution_proposed_at ? 'Awaiting approval' : 'Open'}</p></div></div><p className="complaint-original">{activeComplaint.details}</p><div className="thread-messages">{messages.map((item) => <article className={`thread-message ${item.sender_id === auth.id ? 'from-manager' : ''}`} key={item.id}><p>{item.message}</p><small>{item.sender_id === auth.id ? 'You' : 'Property manager'} · {new Date(item.created_at).toLocaleString()}</small></article>)}{!messages.length && <p className="empty-state">No replies yet.</p>}</div>{activeComplaint.status !== 'resolved' && <><form className="thread-reply" onSubmit={onSend}><label htmlFor="stakeholder-message">Reply</label><textarea id="stakeholder-message" name="message" required maxLength="5000" rows="3"/><button className="primary-button">Send reply</button></form><div className="resolution-actions">{activeComplaint.resolution_proposed_at && activeComplaint.resolution_proposed_by !== auth.id && <><button className="primary-button" onClick={() => onResolution('approve')}>Approve proposed resolution</button><button className="secondary-button" onClick={() => onResolution('rework')}>Request more work</button></>}{activeComplaint.resolution_proposed_by === auth.id && <p>Your resolution proposal is waiting for the property manager’s approval.</p>}{!activeComplaint.resolution_proposed_at && <button className="secondary-button" onClick={() => onResolution('propose')}>Propose resolution</button>}</div></>}</div> : <><section className="welcome-row"><div><div className="eyebrow">PRIVATE COMPLAINT PORTAL</div><h1>My property concerns</h1><p>Continue your conversation with the property manager. A case closes only after the other participant approves the proposed resolution.</p></div><button className="primary-button" onClick={() => setNewComplaint(true)}><Plus size={16}/> Lodge a complaint</button></section><div className="panel portal-case-list">{cases.map((item) => <button className="portal-case-row" key={item.id} onClick={() => setActiveComplaint(item)}><span><b>{item.subject}</b><small>{item.reference_code} · {item.property_address}</small></span><span className="invite-status">{item.resolution_approved_at ? 'Resolved' : item.resolution_proposed_at ? 'Approval needed' : 'Open'}</span></button>)}{!cases.length && <EmptyState title="No complaints yet" text="Submit a concern and return here to continue the conversation."/>}</div></>}{toast && <div className="toast"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={onClearToast}><X size={15}/></button></div>}</main></div>;
 }
 
 function Metric({ icon: Icon, label, value, note, color }) {
@@ -670,7 +905,7 @@ function Activity({ icon: Icon, tone, title, text, time }) {
   return <div className="activity-item"><span className={`activity-icon ${tone}`}><Icon size={15}/></span><div className="activity-copy"><b>{title}</b><span>{text}</span><small>{time}</small></div></div>;
 }
 
-function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onToggleAdvertisement, onAllocate, onRecordPayment, onSendPacket, sendingTenant, onDownloadPdfs, downloadingTenant, hasPaid }) {
+function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onToggleAdvertisement, onRequestVerification, onUpdateViewingStatus, onUpdateListingReport, onUpdatePropertyStatus, onAllocate, onRecordPayment, onSendPacket, sendingTenant, onDownloadPdfs, downloadingTenant, hasPaid }) {
   const copy = {
     Properties: ['Property portfolio', 'Delete properties, manage availability, and choose which available homes appear on the dashboard.'],
     Tenants: ['Tenant directory', 'Register tenants, record payments, and allocate available properties after payment.'],
@@ -678,13 +913,19 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
     Guarantors: ['Guarantor records', 'Keep tenant guarantor details available when you need them.'],
     Caretakers: ['Caretaker directory', 'Coordinate on-site teams across your properties.'],
     Agents: ['Agent directory', 'Your trusted partners for letting and sales.'],
+    Enquiries: ['Property enquiries', 'Follow up with people interested in your advertised properties.'],
+    'Viewing requests': ['Viewing requests', 'Review the preferred dates submitted by prospective visitors.'],
+    'Listing reports': ['Listing reports', 'Review visitor reports about inaccurate or suspicious advertisements.'],
   }[page] || ['Portfolio overview', 'Your properties at a glance.'];
   const columns = {
-    Properties: [['Property', 'name'], ['City', 'city'], ['State / province', 'state'], ['Country', 'country'], ['Listing', 'listing_type'], ['Price', 'price'], ['Availability', 'status']],
+    Properties: [['Property', 'name'], ['Type', 'property_type'], ['City', 'city'], ['State / province', 'state'], ['Country', 'country'], ['Listing', 'listing_type'], ['Price', 'price'], ['Views', 'view_count'], ['Availability', 'status'], ['Verification', 'verification_status']],
     'Payments & charges': [['Description', 'description'], ['Tenant', 'tenant_name'], ['Category', 'category'], ['Amount', 'amount'], ['Due date', 'due_date'], ['Status', 'status']],
     Guarantors: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Relationship', 'relationship']],
     Caretakers: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
     Agents: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
+    Enquiries: [['Property', 'property_name'], ['Name', 'name'], ['Email', 'email'], ['Phone', 'phone'], ['Message', 'message'], ['Received', 'created_at']],
+    'Viewing requests': [['Property', 'property_name'], ['Name', 'name'], ['Email', 'email'], ['Phone', 'phone'], ['Requested time', 'requested_at'], ['Status', 'status']],
+    'Listing reports': [['Property', 'property_name'], ['Reason', 'reason'], ['Details', 'details'], ['Reporter', 'reporter_email'], ['Status', 'status'], ['Received', 'created_at']],
   }[page] || [];
   const filtered = records.filter((record) => {
     const tenantName = tenants.find((tenant) => tenant.id === record.tenant_id)?.full_name || '';
@@ -693,13 +934,16 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
   const value = (key, item) => {
     if (key === 'price' || key === 'amount') return currency(item);
     if (key === 'tenant_name') return tenants.find((tenant) => tenant.id === item.tenant_id)?.full_name || 'General/property charge';
-    if (key === 'status') return item === 'available' ? 'Available' : item === 'occupied' ? 'Occupied' : item === 'under_offer' ? 'Under offer' : item === 'sold' ? 'Sold' : item || '—';
+    if (key === 'status') return item === 'available' ? 'Available' : item === 'occupied' ? 'Rented' : item === 'reserved' || item === 'under_offer' ? 'Reserved' : item === 'sold' ? 'Sold' : item || '—';
+    if (key === 'created_at' || key === 'requested_at') return item ? new Date(item).toLocaleString() : '—';
     return item || '—';
   };
-  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div><h1>{copy[0]}</h1><p>{copy[1]}</p></div><button className="primary-button" onClick={openModal}><Plus size={17}/>{page === 'Tenants' ? 'Register a tenant' : page === 'Properties' ? 'Add a property' : page === 'Payments & charges' ? 'Record a payment' : 'Add a record'}</button></div>
+  const canAdd = ['Tenants','Properties','Payments & charges','Guarantors','Caretakers','Agents'].includes(page);
+  const renderCell = (record, key) => page === 'Viewing requests' && key === 'status' ? <select aria-label={`Update viewing request for ${record.name}`} value={record.status} onChange={(event) => onUpdateViewingStatus(record, event.target.value)}><option value="new">New</option><option value="confirmed">Confirmed</option><option value="declined">Declined</option><option value="completed">Completed</option></select> : page === 'Listing reports' && key === 'status' ? <select aria-label={`Update report status for ${record.property_name}`} value={record.status} onChange={(event) => onUpdateListingReport(record, event.target.value)}><option value="new">New</option><option value="reviewed">Reviewed</option><option value="actioned">Actioned</option><option value="dismissed">Dismissed</option></select> : page === 'Properties' && key === 'status' ? <select aria-label={`Update status for ${record.name}`} value={record.status} onChange={(event) => onUpdatePropertyStatus(record, event.target.value)}><option value="available">Available</option><option value="reserved">Reserved</option><option value="occupied">Rented</option><option value="sold">Sold</option></select> : value(key, key === 'tenant_name' ? record : record[key]);
+  return <section className="management"><div className="welcome-row"><div><div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div><h1>{copy[0]}</h1><p>{copy[1]}</p></div>{canAdd && <button className="primary-button" onClick={openModal}><Plus size={17}/>{page === 'Tenants' ? 'Register a tenant' : page === 'Properties' ? 'Add a property' : page === 'Payments & charges' ? 'Record a payment' : 'Add a record'}</button>}</div>
     <div className="panel management-panel"><div className="panel-heading"><div><h2>{page}</h2><span className="management-sub">{page === 'Tenants' ? `${tenants.length} tenant records` : `${records.length} records`}</span></div><button className="filter-button" onClick={onRecordPayment}><Filter size={15}/> Filters <ChevronDown size={13}/></button></div><label className="search-box wide-search"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${page.toLowerCase()}...`}/></label>
       {page === 'Tenants' ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>RENT</th><th>PAYMENT</th><th>ACTION</th></tr></thead><tbody>{tenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase())).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td><td>{hasPaid(tenant.id) ? 'Payment recorded' : 'No payment'}</td><td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => hasPaid(tenant.id) ? onAllocate(tenant) : onRecordPayment()}>{tenant.property_id ? 'Change property' : hasPaid(tenant.id) ? 'Allocate' : 'Record payment'}</button><button className="secondary-button compact-button" disabled={sendingTenant === tenant.id} onClick={() => onSendPacket(tenant.id)}>{sendingTenant === tenant.id ? 'Sending…' : 'Send PDFs'}</button><button className="secondary-button compact-button" disabled={downloadingTenant === tenant.id} onClick={() => onDownloadPdfs(tenant.id)}>{downloadingTenant === tenant.id ? 'Generating…' : 'Download PDFs'}</button></div></td></tr>)}</tbody></table>{tenants.length === 0 && <EmptyState title="No tenants yet" text="Register a tenant to start recording leases and payments."/>}</div>
-      : filtered.length ? <div className="table-wrap"><table><thead><tr>{columns.map(([label]) => <th key={label}>{label.toUpperCase()}</th>)}{page === 'Properties' && <th>ACTION</th>}</tr></thead><tbody>{filtered.map((record, index) => <tr key={record.id || index}>{columns.map(([label, key]) => <td key={key}>{value(key, key === 'tenant_name' ? record : record[key])}</td>)}{page === 'Properties' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status !== 'available'} onClick={() => onToggleAdvertisement(record)}>{record.is_advertised ? 'Hide ad' : 'Advertise'}</button><button className="danger-button" title={`Delete ${record.name}`} onClick={() => onDeleteProperty(record)}><Trash2 size={15}/><span>Delete</span></button></div></td>}</tr>)}</tbody></table></div>
+      : filtered.length ? <div className="table-wrap"><table><thead><tr>{columns.map(([label]) => <th key={label}>{label.toUpperCase()}</th>)}{page === 'Properties' && <th>ACTION</th>}</tr></thead><tbody>{filtered.map((record, index) => <tr key={record.id || index}>{columns.map(([label, key]) => <td key={key}>{renderCell(record, key)}</td>)}{page === 'Properties' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status !== 'available'} onClick={() => onToggleAdvertisement(record)}>{record.is_advertised ? 'Hide ad' : 'Advertise'}</button><button className="secondary-button compact-button" disabled={record.verification_status === 'verified' || record.verification_status === 'pending'} onClick={() => onRequestVerification(record)}>{record.verification_status === 'verified' ? 'Verified' : record.verification_status === 'pending' ? 'Review pending' : 'Request verification'}</button><button className="danger-button" title={`Delete ${record.name}`} onClick={() => onDeleteProperty(record)}><Trash2 size={15}/><span>Delete</span></button></div></td>}</tr>)}</tbody></table></div>
       : <EmptyState title={`No ${page.toLowerCase()} yet`} text={page === 'Properties' ? 'Add a property, then choose whether to advertise it on the dashboard.' : page === 'Payments & charges' ? 'Record rent, deposit and service payments here.' : `Add your first ${page.toLowerCase()} record to get started.`} action={openModal}/>}</div>
     </section>;
 }
