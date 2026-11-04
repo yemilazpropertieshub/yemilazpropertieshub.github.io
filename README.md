@@ -1,5 +1,9 @@
 # Yemilaz Properties
 
+## Custom domain
+
+The GitHub Pages site uses `https://yemilazproperties.com` (the `CNAME` file is in `public/CNAME`). In the repository, open **Settings → Pages → Custom domain**, enter `yemilazproperties.com`, and save. At the domain registrar, point the apex (`@`) to GitHub Pages using these four `A` records: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, and `185.199.111.153`. Add a `CNAME` record for `www` pointing to `yemilazpropertieshub.github.io`. Remove conflicting existing records for `@` or `www`, then enable **Enforce HTTPS** in Pages after GitHub verifies the DNS and issues the certificate. GitHub recommends setting the repository custom domain before changing DNS; propagation and certificate issuance can take time. See [GitHub's custom-domain guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
+
 A responsive property marketing and management website built with Node.js, React, Vite, and Supabase.
 
 ## Property and tenant workflow
@@ -50,7 +54,7 @@ The app sends confirmation links back to the current Yemilaz Properties site and
 
 In the Supabase project dashboard:
 
-1. Open **Authentication → URL Configuration**. Set **Site URL** to `https://yemilazpropertieshub.github.io`. Add `https://yemilazpropertieshub.github.io/**` to **Redirect URLs**. For local development, also add `http://localhost:5173/**`.
+1. Open **Authentication → URL Configuration**. Set **Site URL** to `https://yemilazproperties.com`. Add `https://yemilazproperties.com/**` and `https://www.yemilazproperties.com/**` to **Redirect URLs**. For local development, also add `http://localhost:5173/**`.
 2. Open **Authentication → Emails → SMTP Settings** and enable custom SMTP. With a verified Resend sending domain, use host `smtp.resend.com`, port `465`, username `resend`, and a Resend API key as the password. Set the sender name to **Yemilaz Properties** and the sender address to an address on the verified domain, such as `tenancy@yemilazproperties.com` only after that domain is verified in Resend.
 3. Open **Authentication → Emails → Templates → Confirm signup**. Use subject `Confirm your Yemilaz Properties account` and paste the HTML from [`supabase/email-templates/confirm-signup.html`](supabase/email-templates/confirm-signup.html) as the message body. The template uses Supabase’s `{{ .ConfirmationURL }}` variable only to produce the secure confirmation link; the email sender and displayed copy are Yemilaz Properties.
 4. Replace the **Reset password** template with [`supabase/email-templates/password-reset.html`](supabase/email-templates/password-reset.html) as well, so password recovery uses the same brand.
@@ -66,7 +70,7 @@ GitHub Pages serves only the static website; it cannot safely keep an email API 
 
 1. Create a Resend account and verify the email domain/address that will appear in the From field.
 2. Deploy the `server` folder to a hosting service that runs Node.js. Set the variables listed in [`server/.env.example`](server/.env.example) in that host’s private environment settings. Do not commit a real `.env` file or Resend key.
-3. Set `FRONTEND_ORIGINS` to the exact live GitHub Pages origin. For this repository it is `https://yemilazpropertieshub.github.io`.
+3. Set `FRONTEND_ORIGINS` to `https://yemilazproperties.com,https://www.yemilazproperties.com` in the Node service's environment settings, then redeploy it.
 4. Set `VITE_DOCUMENT_API_URL` in GitHub Actions repository variables (or repository secrets) to the Node service base URL, then deploy the frontend again. The Pages workflow accepts either location, with the variable taking priority.
 5. In **Landlord profile**, enter the lawyer’s email and review the agreement terms and house rules. Add agents and caretakers with email addresses under their directories.
 6. Register a tenant with tenant and guarantor email addresses. Select any assigned agent/caretaker. When saved, the service emails a separate PDF attachment to the landlord, tenant, guarantor, lawyer, and selected agent/caretaker.
