@@ -645,6 +645,49 @@ function App() {
     formElement.reset(); setToast('Your complaint has been submitted securely. Our team will review it.');
   }
 
+  async function savePersonEdit(event) {
+    event.preventDefault();
+    if (!auth || !supabase || !editingPerson) return;
+    const form = new FormData(event.currentTarget);
+    const kind = editingPerson.kind;
+    const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
+    const row = kind === 'tenant'
+      ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, rent_amount: Number(form.get('rent_amount') || 0), lease_start: form.get('lease_start') || null, lease_end: form.get('lease_end') || null, notes: form.get('notes') || null }
+      : kind === 'guarantor'
+        ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, relationship: form.get('relationship') || null, occupation: form.get('occupation') || null, address: form.get('address') || null }
+        : { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, notes: form.get('notes') || null };
+    setSaving(true);
+    const { data, error } = await supabase.from(table).update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
+    setSaving(false);
+    if (error) { setToast(error.message); return; }
+    if (kind === 'tenant') setTenants((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
+    else if (kind === 'staff') { setStaffRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); }
+    else setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
+    setEditingPerson(null); setToast('Contact details updated.');
+  }
+
+  async function deletePerson(record, kind) {
+    const names = { tenant: 'tenant', guarantor: 'guarantor', staff: record.role === 'caretaker' ? 'caretaker' : 'agent' };
+    const label = names[kind];
+    const warning = kind === 'tenant' ? ' This also removes linked payment and guarantor records.' : kind === 'staff' ? ' Tenant records will remain, but this person will be unassigned.' : '';
+    if (!window.confirm(`Delete ${label} “${record.full_name}”?${warning}`)) return;
+    if (!auth || !supabase) return;
+    const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
+    const { error } = await supabase.from(table).delete().eq('owner_id', auth.id).eq('id', record.id);
+    if (error) { setToast(error.message); return; }
+    if (kind === 'tenant') {
+      setTenants((current) => current.filter((item) => item.id !== record.id));
+      setPaymentRecords((current) => current.filter((item) => item.tenant_id !== record.id));
+      if (record.property_id) {
+        const { error: propertyError } = await supabase.from('properties').update({ status: 'available' }).eq('owner_id', auth.id).eq('id', record.property_id).eq('status', 'occupied');
+        if (!propertyError) setPropertyRecords((current) => current.map((item) => item.id === record.property_id ? { ...item, status: 'available' } : item));
+      }
+    }
+    else if (kind === 'staff') { setStaffRecords((current) => current.filter((item) => item.id !== record.id)); setRecords((current) => current.filter((item) => item.id !== record.id)); }
+    else setRecords((current) => current.filter((item) => item.id !== record.id));
+    setToast(`${label[0].toUpperCase()}${label.slice(1)} deleted.`);
+  }
+
   if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/>
     {showComplaintRoom ? <PublicComplaintRoom properties={dashboardAds} onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={publicListings} onSignIn={() => setAuthModal(true)} onComplaint={() => setShowComplaintRoom(true)}/>}
     {authModal && <AuthDialog onSubmit={login} onSignUp={registerLandlord} onForgotPassword={requestPasswordReset} onClose={() => setAuthModal(false)} signing={signing}/>}
@@ -857,48 +900,6 @@ function PlatformContactDirectory({ client }) {
     else { setPeople(data || []); setMessage(''); }
   }
 
-  async function savePersonEdit(event) {
-    event.preventDefault();
-    if (!auth || !supabase || !editingPerson) return;
-    const form = new FormData(event.currentTarget);
-    const kind = editingPerson.kind;
-    const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
-    const row = kind === 'tenant'
-      ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, rent_amount: Number(form.get('rent_amount') || 0), lease_start: form.get('lease_start') || null, lease_end: form.get('lease_end') || null, notes: form.get('notes') || null }
-      : kind === 'guarantor'
-        ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, relationship: form.get('relationship') || null, occupation: form.get('occupation') || null, address: form.get('address') || null }
-        : { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, notes: form.get('notes') || null };
-    setSaving(true);
-    const { data, error } = await supabase.from(table).update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
-    setSaving(false);
-    if (error) { setToast(error.message); return; }
-    if (kind === 'tenant') setTenants((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
-    else if (kind === 'staff') { setStaffRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); }
-    else setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
-    setEditingPerson(null); setToast('Contact details updated.');
-  }
-
-  async function deletePerson(record, kind) {
-    const names = { tenant: 'tenant', guarantor: 'guarantor', staff: record.role === 'caretaker' ? 'caretaker' : 'agent' };
-    const label = names[kind];
-    const warning = kind === 'tenant' ? ' This also removes linked payment and guarantor records.' : kind === 'staff' ? ' Tenant records will remain, but this person will be unassigned.' : '';
-    if (!window.confirm(`Delete ${label} “${record.full_name}”?${warning}`)) return;
-    if (!auth || !supabase) return;
-    const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
-    const { error } = await supabase.from(table).delete().eq('owner_id', auth.id).eq('id', record.id);
-    if (error) { setToast(error.message); return; }
-    if (kind === 'tenant') {
-      setTenants((current) => current.filter((item) => item.id !== record.id));
-      setPaymentRecords((current) => current.filter((item) => item.tenant_id !== record.id));
-      if (record.property_id) {
-        const { error: propertyError } = await supabase.from('properties').update({ status: 'available' }).eq('owner_id', auth.id).eq('id', record.property_id).eq('status', 'occupied');
-        if (!propertyError) setPropertyRecords((current) => current.map((item) => item.id === record.property_id ? { ...item, status: 'available' } : item));
-      }
-    }
-    else if (kind === 'staff') { setStaffRecords((current) => current.filter((item) => item.id !== record.id)); setRecords((current) => current.filter((item) => item.id !== record.id)); }
-    else setRecords((current) => current.filter((item) => item.id !== record.id));
-    setToast(`${label[0].toUpperCase()}${label.slice(1)} deleted.`);
-  }
   useEffect(() => { refresh(); }, []);
   const roles = [...new Set(people.map((person) => person.role))].sort();
   const filtered = people.filter((person) => (role === 'All roles' || person.role === role)
