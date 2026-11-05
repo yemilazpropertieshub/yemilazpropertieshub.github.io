@@ -14,19 +14,44 @@ A responsive property marketing and management website built with Node.js, React
 - Allocating a property marks it occupied and removes it from public advertisements. Releasing or changing an allocation returns the old property to Available.
 - Record later rent, deposit, and service-charge payments in **Payments & charges**.
 - Delete a property from **Properties**. Its tenant and payment history are retained, with the tenant allocation cleared.
+- Tenants have their own sign-in profile, document downloads, complaint conversation, document-signature history, and maintenance request form.
+- The landlord workspace includes rent schedules, manual email reminders, maintenance tracking with caretaker/agent assignment, a viewing calendar, activity notifications, payment evidence, and CSV portfolio reports.
+- Platform administrators can inspect registered contact information and suspend/reactivate linked accounts from **Administration → People directory**. The app checks account status at sign-in and periodically during a session after the account-status migration is applied.
+- Public visitors can save homes and searches in their browser. The existing map browser uses the filtered locations; property records can include latitude/longitude for a more precise map result.
+
+## Portfolio enhancements
+
+1. **Account access:** Administrators can suspend and reactivate linked landlord, tenant, agent and caretaker accounts, with a recorded reason.
+2. **Maintenance:** Landlords can log, assign and track work. Tenants can submit repairs and follow the status in their own profile.
+3. **Rent planning:** Tenant lease terms generate recurring future rent ledger entries. Landlords can review overdue amounts and email reminders.
+4. **Payment evidence:** Landlords can attach a private JPG, PNG, WebP or PDF proof file (up to 10 MB) to a new charge and open it using a temporary signed link.
+5. **Saved homes/searches:** Visitors can favourite homes, view only their shortlist, and save a search in the current browser.
+6. **Map browsing:** Existing map browsing follows current location filters; landlords may supply coordinates for more precise map positioning.
+7. **Viewing calendar:** Viewings can be reviewed and moved between new, confirmed, declined and completed states.
+8. **Document signatures:** Landlords can share a versioned agreement, house-rules or handover snapshot. Tenants can review and add their typed signature.
+9. **Activity notifications:** In-app notifications are created for property enquiries, viewing requests and linked complaints.
+10. **Portfolio report:** Property insights can export the current properties, tenant records and payment ledger as CSV.
 
 ## One-time Supabase update
 
-Before deploying this version, open the project’s **Supabase Dashboard → SQL Editor** and run these files in order:
+Before deploying this version, open the project’s **Supabase Dashboard → SQL Editor** and run these files in order. Run each file once, from top to bottom; do not skip earlier schema updates:
 
 1. [`supabase/migrations/20261101_property_allocation_and_advertising.sql`](supabase/migrations/20261101_property_allocation_and_advertising.sql)
 2. [`supabase/migrations/20261102_landlord_profiles_and_tenant_packets.sql`](supabase/migrations/20261102_landlord_profiles_and_tenant_packets.sql)
 3. [`supabase/migrations/20261103_property_photos_and_pdf_receipts.sql`](supabase/migrations/20261103_property_photos_and_pdf_receipts.sql)
 4. [`supabase/migrations/20261104_international_property_locations.sql`](supabase/migrations/20261104_international_property_locations.sql)
 5. [`supabase/migrations/20261105_landlord_branding_templates.sql`](supabase/migrations/20261105_landlord_branding_templates.sql)
-6. [`supabase/migrations/20261106_landlord_invitation_security.sql`](supabase/migrations/20261106_landlord_invitation_security.sql)
-7. [`supabase/migrations/20261107_public_property_complaints.sql`](supabase/migrations/20261107_public_property_complaints.sql)
-8. [`supabase/migrations/20261108_listing_and_resolution_workflows.sql`](supabase/migrations/20261108_listing_and_resolution_workflows.sql)
+6. [`supabase/migrations/20261105_transaction_edit_void.sql`](supabase/migrations/20261105_transaction_edit_void.sql)
+7. [`supabase/migrations/20261106_landlord_invitation_security.sql`](supabase/migrations/20261106_landlord_invitation_security.sql)
+8. [`supabase/migrations/20261107_public_property_complaints.sql`](supabase/migrations/20261107_public_property_complaints.sql)
+9. [`supabase/migrations/20261108_listing_and_resolution_workflows.sql`](supabase/migrations/20261108_listing_and_resolution_workflows.sql)
+10. [`supabase/migrations/20261109_tenant_workspace.sql`](supabase/migrations/20261109_tenant_workspace.sql)
+11. [`supabase/migrations/20261110_platform_contact_directory.sql`](supabase/migrations/20261110_platform_contact_directory.sql)
+12. [`supabase/migrations/20261111_property_wanted_requests.sql`](supabase/migrations/20261111_property_wanted_requests.sql)
+13. [`supabase/migrations/20261112_people_account_invitations.sql`](supabase/migrations/20261112_people_account_invitations.sql)
+14. [`supabase/migrations/20261113_platform_admin_complaint_inbox.sql`](supabase/migrations/20261113_platform_admin_complaint_inbox.sql)
+15. [`supabase/migrations/20261114_fix_tenant_rls_recursion.sql`](supabase/migrations/20261114_fix_tenant_rls_recursion.sql)
+16. [`supabase/migrations/20261115_property_operations_suite.sql`](supabase/migrations/20261115_property_operations_suite.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -47,6 +72,10 @@ on conflict (user_id) do nothing;
 The administrator then signs in, opens **Landlord access**, and generates codes for landlords. Do not issue a code publicly. Each landlord enters their code once during signup; it becomes unusable as soon as the account is created.
 
 The seventh migration adds public complaint intake. The eighth adds listing enquiries, viewing requests, listing reports, viewing analytics, listing verification review, complaint message history, stakeholder complaint accounts, and two-party resolution approval. Stakeholder accounts can access only cases they lodge or are linked to; landlord accounts remain invitation-only. For continuous complaint chat, submit while signed in or create a **Tenant or complainant** account with the email address on the complaint or tenant record. The other participant can propose a resolution, and only the other participant can approve it; either may request more work. Landlords can approve verification requests only after checking ownership evidence outside the website; the administrator records the decision under **Listing verification**. Public enquiry and viewing submissions appear in the property manager’s private workspace.
+
+The ninth migration adds auditable payment edit/void fields. The tenth provides the private tenant portal and profile links. The eleventh adds the administrator-only contact directory. The twelfth adds anonymous property-wanted requests and landlord opt-in preferences. The thirteenth adds stakeholder invitation links and the personal address/contact fields used by account profiles. The fourteenth makes all linked complaints visible in platform administration. The fifteenth fixes the recursive tenant row-security policy that can make tenant queries fail. The sixteenth adds account suspension controls, maintenance requests, future rent charges, private payment-evidence storage, saved-listing/search tables, notifications, and versioned tenancy-signature records. It also adds property coordinates. This latest migration creates the private `payment-evidence` storage bucket automatically.
+
+Rent schedules start after the lease’s initial period because registration records the initial payment separately. The landlord can email an outstanding-rent reminder from the schedule, then update the payment ledger when paid. Typed tenancy signatures are an audit record, not a certified e-signature service; have a qualified lawyer review agreements for your jurisdiction. Saved searches and favourites on the public site are browser-local. Email delivery of search alerts is not configured by this website version.
 
 ## Brand landlord confirmation email and links
 
@@ -90,5 +119,5 @@ The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_K
 1. Install Node.js 20 or newer.
 2. Run `npm install` and then `npm run dev`.
 3. Copy `.env.example` to `.env.local` and set Supabase URL, publishable/anon key, and document API URL.
-4. For a new project, run `supabase/schema.sql`, then migrations 6, 7, and 8 above. For the existing project, run all eight migrations above in order. Then bootstrap the platform administrator as described above.
+4. For a new project, run `supabase/schema.sql`, then every migration above in order. For the existing project, apply any migrations not yet run, in order. Then bootstrap the platform administrator as described above.
 5. For the Node mail service, run `npm install` inside `server`, copy `server/.env.example` to `server/.env`, fill in its values, and run `npm start`.
