@@ -76,6 +76,8 @@ function App() {
   const [accountRole, setAccountRole] = useState('landlord');
   const [stakeholderCases, setStakeholderCases] = useState([]);
   const [tenantAccount, setTenantAccount] = useState(null);
+  const [staffAccount, setStaffAccount] = useState(null);
+  const [staffAssignments, setStaffAssignments] = useState([]);
   const [tenantContacts, setTenantContacts] = useState([]);
   const [tenantDocuments, setTenantDocuments] = useState([]);
   const [tenantDocsBusy, setTenantDocsBusy] = useState(false);
@@ -120,16 +122,18 @@ function App() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       const user = data.session?.user || null; setAuth(user);
+      const joinRole = new URLSearchParams(window.location.search).get('join');
+      if (!user && ['tenant', 'agent', 'caretaker'].includes(joinRole)) setAuthModal(true);
       if (user) {
-        const { data: profile } = await supabase.from('stakeholder_profiles').select('user_id,role').eq('user_id', user.id).maybeSingle();
-        if (active) setAccountRole(profile?.role === 'tenant' ? 'tenant' : profile ? 'stakeholder' : 'landlord');
+        const { data: profile } = await supabase.from('stakeholder_profiles').select('user_id,role,staff_id').eq('user_id', user.id).maybeSingle();
+        if (active) setAccountRole(profile?.role || 'landlord');
       }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setAuth(session?.user || null);
       if (session?.user) {
         supabase.rpc('is_platform_admin').then(({ data }) => setIsPlatformAdmin(data === true));
-        supabase.from('stakeholder_profiles').select('user_id,role').eq('user_id', session.user.id).maybeSingle().then(({ data }) => setAccountRole(data?.role === 'tenant' ? 'tenant' : data ? 'stakeholder' : 'landlord'));
+        supabase.from('stakeholder_profiles').select('user_id,role,staff_id').eq('user_id', session.user.id).maybeSingle().then(({ data }) => setAccountRole(data?.role || 'landlord'));
       } else { setIsPlatformAdmin(false); setAccountRole('landlord'); }
       if (event === 'SIGNED_IN' && new URLSearchParams(window.location.search).get('auth') === 'confirmed') {
         setAuthNotice({ kind: 'success', message: 'Your Yemilaz Properties profile is confirmed. Welcome to your workspace.' });
@@ -144,7 +148,7 @@ function App() {
     if (!supabase) return;
     let active = true;
     if (auth && accountRole === 'tenant') {
-      setTenants([]); setPaymentRecords([]); setStaffRecords([]); setLandlordProfile(null);
+      setTenants([]); setPaymentRecords([]); setStaffRecords([]); setLandlordProfile(null); setStaffAccount(null); setStaffAssignments([]);
       const loadTenantProperty = async () => {
         const { data: tenant, error } = await supabase.from('tenants').select('property_id').ilike('email', auth.email).order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (!active) return;
@@ -157,8 +161,31 @@ function App() {
       loadTenantProperty();
       return () => { active = false; };
     }
+    if (auth && ['agent', 'caretaker'].includes(accountRole)) {
+      setTenants([]); setPaymentRecords([]); setStaffRecords([]); setLandlordProfile(null); setTenantAccount(null);
+      const loadStaffWorkspace = async () => {
+        const { data: profile, error: profileError } = await supabase.from('stakeholder_profiles').select('staff_id').eq('user_id', auth.id).maybeSingle();
+        if (!active) return;
+        if (profileError || !profile?.staff_id) { setToast(profileError?.message || 'Your staff profile is not linked yet. Ask the landlord to resend your invitation.'); return; }
+        const { data: staff, error: staffError } = await supabase.from('staff').select('id,full_name,role,email,phone,permanent_address,property_id,notes').eq('id', profile.staff_id).maybeSingle();
+        if (!active) return;
+        if (staffError || !staff) { setToast(staffError?.message || 'Your staff record could not be found.'); return; }
+        setStaffAccount(staff);
+        const assignmentField = staff.role === 'agent' ? 'agent_id' : 'caretaker_id';
+        const { data: assignments, error: assignmentError } = await supabase.from('tenants').select('id,full_name,email,phone,property_id,lease_start,lease_end,status').eq(assignmentField, staff.id).order('full_name');
+        if (!active) return;
+        if (assignmentError) { setToast(assignmentError.message); return; }
+        const rows = assignments || []; setStaffAssignments(rows);
+        const ids = [...new Set([staff.property_id, ...rows.map((item) => item.property_id)].filter(Boolean))];
+        if (!ids.length) { setPropertyRecords([]); return; }
+        const { data: assignedProperties, error: propertyError } = await supabase.from('properties').select('id,name,address,city,state,country,status').in('id', ids);
+        if (active) { if (propertyError) setToast(propertyError.message); else setPropertyRecords(assignedProperties || []); }
+      };
+      loadStaffWorkspace();
+      return () => { active = false; };
+    }
     if (auth && accountRole === 'stakeholder') {
-      setTenants([]); setPaymentRecords([]); setStaffRecords([]); setLandlordProfile(null);
+      setTenants([]); setPaymentRecords([]); setStaffRecords([]); setLandlordProfile(null); setStaffAccount(null); setStaffAssignments([]); setTenantAccount(null);
       supabase.from('properties').select('id,owner_id,name,address,city,state,country,listing_type,property_type,price,bedrooms,bathrooms,description,amenities,image_url,image_urls,status,is_advertised,verification_status,viewing_notes,view_count')
         .then(({ data }) => { if (active) setPropertyRecords(data || []); });
       return () => { active = false; };
@@ -199,7 +226,7 @@ function App() {
   }, [auth, accountRole]);
 
   useEffect(() => {
-    if (!auth || !['stakeholder', 'tenant'].includes(accountRole) || !supabase) { setStakeholderCases([]); setTenantAccount(null); setTenantContacts([]); return; }
+    if (!auth || !['stakeholder', 'tenant', 'agent', 'caretaker'].includes(accountRole) || !supabase) { setStakeholderCases([]); setTenantAccount(null); setTenantContacts([]); return; }
     const refresh = () => supabase.from('property_complaints').select('*').or(`authenticated_reporter_id.eq.${auth.id},other_participant_id.eq.${auth.id}`).order('created_at', { ascending: false })
       .then(({ data, error }) => { if (error) setToast(error.message); else setStakeholderCases(data || []); });
     if (accountRole === 'tenant') supabase.from('tenants').select('*').ilike('email', auth.email).order('created_at', { ascending: false }).limit(1).maybeSingle().then(async ({ data, error }) => {
@@ -233,11 +260,11 @@ function App() {
       email: form.get('email'), password: form.get('password'),
       options: {
         emailRedirectTo: `${window.location.origin}${window.location.pathname}?auth=confirmed`,
-        data: { account_role: accountRoleForSignup, stakeholder_kind: form.get('stakeholder_kind') || 'stakeholder', full_name: form.get('full_name'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon', invite_code: inviteCode },
+        data: { account_role: accountRoleForSignup, stakeholder_kind: form.get('stakeholder_kind') || 'stakeholder', full_name: form.get('full_name'), phone: form.get('phone'), permanent_address: form.get('permanent_address'), business_name: form.get('business_name') || 'Yemilaz Properties', brand_template: form.get('brand_template') || 'jade', brand_logo: form.get('brand_logo') || 'horizon', invite_code: inviteCode },
       },
     });
     setSigning(false);
-    if (error) setToast(/invite|invitation|access code/i.test(error.message) ? 'That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.' : /tenant record|email address/i.test(error.message) && form.get('stakeholder_kind') === 'tenant' ? 'We could not find a tenancy with this email. Ask your landlord to save this email on your tenant record, then try again.' : 'We could not create this Yemilaz Properties account. Check the details and try again.');
+    if (error) setToast(/access code/i.test(error.message) ? 'That Yemilaz Properties access code is invalid, expired, or already used. Ask the platform administrator for a new code.' : /tenant record|matching staff invitation|email address/i.test(error.message) ? 'We could not match this signup to a landlord’s tenant or staff record. Open the latest invitation and use its email address.' : 'We could not create this Yemilaz Properties account. Check the details and try again.');
     else { setAuthModal(false); setAuthNotice({ kind: 'pending', message: 'We have sent a confirmation email from Yemilaz Properties. Confirm your email to activate your account.' }); }
   }
 
@@ -291,6 +318,28 @@ function App() {
         ? 'Cannot reach the PDF service. Check that Render is Live and its FRONTEND_ORIGINS exactly matches this website, then open the service /health address.'
         : `PDF delivery failed: ${sendError.message}`);
     } finally { setSendingTenant(null); }
+  }
+
+  async function sendProfileInvitation(role, recordId) {
+    if (!import.meta.env.VITE_DOCUMENT_API_URL || !supabase) {
+      setToast('The person was saved, but profile invitations need the Render email service URL configured.'); return false;
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Please sign in again before sending an invitation.');
+      const response = await fetch(`${import.meta.env.VITE_DOCUMENT_API_URL.replace(/\/$/, '')}/api/profile-invitations`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ role, recordId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The invitation could not be sent.');
+      setToast(`Signup invitation sent to ${result.email}.`); return true;
+    } catch (error) {
+      setToast(error.message === 'Failed to fetch'
+        ? 'The person was saved, but the Render email service could not be reached. Check that the service is Live and FRONTEND_ORIGINS includes this website.'
+        : `The person was saved, but the invitation email failed: ${error.message}`);
+      return false;
+    }
   }
 
   async function downloadTenantPdfs(tenantId) {
@@ -476,6 +525,7 @@ function App() {
     setTenants((current) => [{ ...tenant, property_id: propertyId }, ...current]);
     setSaving(false); setModal(false);
     await sendTenantPackets(tenant.id);
+    await sendProfileInvitation('tenant', tenant.id);
   }
 
   async function saveOtherRecord(event) {
@@ -537,7 +587,11 @@ function App() {
     if (page === 'Properties') setPropertyRecords((current) => [data, ...current]);
     if (page === 'Payments & charges') setPaymentRecords((current) => [data, ...current]);
     setRecords((current) => [data, ...current]); setModal(false);
-    setToast(page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties workspace.');
+    if (page === 'Caretakers' || page === 'Agents') {
+      setToast('Record saved. Sending profile invitation…');
+      if (data.email) await sendProfileInvitation(data.role, data.id);
+      else setToast('Record saved. Add an email address to send a profile invitation.');
+    } else setToast(page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties workspace.');
   }
 
   async function deleteProperty(property) {
@@ -712,6 +766,7 @@ function App() {
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
 
+  if (['agent', 'caretaker'].includes(accountRole)) return <StaffPortal auth={auth} role={accountRole} staff={staffAccount} tenants={staffAssignments} properties={propertyRecords} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')}/>;
   if (['stakeholder', 'tenant'].includes(accountRole)) return <StakeholderPortal auth={auth} role={accountRole} tenant={tenantAccount} contacts={tenantContacts} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} properties={propertyRecords} onSubmitComplaint={submitComplaint} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} onDownloadDocuments={downloadTenantPortalDocuments} tenantDocsBusy={tenantDocsBusy}/>;
 
   return <>
@@ -894,10 +949,16 @@ function PublicComplaintRoom({ properties, tenants = [], roleDefault = '', onBac
 
 function AuthDialog({ onSubmit, onSignUp, onForgotPassword, onClose, signing }) {
   const [showPassword, setShowPassword] = useState(false);
-  const [createAccount, setCreateAccount] = useState(false);
-  const [role, setRole] = useState('landlord');
+  const invitationParams = new URLSearchParams(window.location.search);
+  const requestedJoinRole = invitationParams.get('join');
+  const inviteRole = ['tenant', 'agent', 'caretaker'].includes(requestedJoinRole) ? requestedJoinRole : null;
+  const invitedEmail = inviteRole ? (invitationParams.get('email') || '') : '';
+  const [createAccount, setCreateAccount] = useState(Boolean(inviteRole));
+  const [role, setRole] = useState(inviteRole || 'landlord');
   const emailRef = useRef(null);
-  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? role === 'landlord' ? 'Create landlord profile' : role === 'tenant' ? 'Create tenant profile' : 'Create complaint account' : 'Sign in'}</h2><p>{createAccount ? role === 'landlord' ? 'Create a private workspace for properties and tenants.' : role === 'tenant' ? 'Use the email your landlord has on your tenancy record.' : 'Create an account to follow and reply to your property complaint.' : 'Access your private property workspace, tenant profile, or complaint conversations.'}</p></div><button type="button" className="icon-button" aria-label="Close sign in" onClick={onClose}><X size={19}/></button></div>{createAccount && <><input type="hidden" name="account_role" value={role === 'landlord' ? 'landlord' : 'stakeholder'}/><input type="hidden" name="stakeholder_kind" value={role === 'tenant' ? 'tenant' : 'stakeholder'}/><label>Your full name<input required name="full_name" autoComplete="name"/></label>{role === 'landlord' ? <><BrandingFields defaultBusinessName=""/><label>Yemilaz Properties access code<input required name="invite_code" autoComplete="one-time-code" placeholder="Enter your one-time invitation code"/><small>Landlord accounts require a current administrator-issued code.</small></label></> : <p className="setup-note">{role === 'tenant' ? 'This email must match the one your landlord saved for your tenancy. You will only see your own lease, assigned contacts, documents, and complaints.' : 'Complaint accounts can access only cases you submit or are invited to participate in.'}</p>}</>}<label>Email address<input ref={emailRef} required name="email" type="email" autoComplete="email" placeholder="you@example.com"/></label><label>Password<input required name="password" type={showPassword ? 'text' : 'password'} autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><label className="show-password"><input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)}/> Show password</label>{!createAccount && <button type="button" className="auth-toggle" onClick={() => onForgotPassword(emailRef.current?.value?.trim())}>Forgot password?</button>}<div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><div className="auth-toggle-row">{createAccount ? <button type="button" className="auth-toggle" onClick={() => setCreateAccount(false)}>Already have an account? Sign in</button> : <><button type="button" className="auth-toggle" onClick={() => { setRole('landlord'); setCreateAccount(true); }}>New landlord</button><button type="button" className="auth-toggle" onClick={() => { setRole('tenant'); setCreateAccount(true); }}>Tenant sign up</button><button type="button" className="auth-toggle" onClick={() => { setRole('stakeholder'); setCreateAccount(true); }}>Other complainant</button></>}</div></form></div>;
+  const roleName = role === 'landlord' ? 'landlord' : role === 'tenant' ? 'tenant' : role === 'agent' ? 'agent' : role === 'caretaker' ? 'caretaker' : 'complaint';
+  const signupDescription = inviteRole ? `You were invited as a ${roleName}. Use the email address from your invitation to connect your profile to the right property team.` : role === 'tenant' ? 'Use the email your landlord saved on your tenancy record.' : role === 'landlord' ? 'Create a private workspace for properties and tenants.' : 'Create an account to follow and reply to your property complaint.';
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={createAccount ? onSignUp : onSubmit}><div className="modal-heading"><div><span className="eyebrow">YEMILAZ PROPERTIES</span><h2>{createAccount ? `Create ${roleName} profile` : 'Sign in'}</h2><p>{createAccount ? signupDescription : 'Access your private property workspace, tenant profile, or complaint conversations.'}</p></div><button type="button" className="icon-button" aria-label="Close sign in" onClick={onClose}><X size={19}/></button></div>{createAccount && <><input type="hidden" name="account_role" value={role === 'landlord' ? 'landlord' : 'stakeholder'}/><input type="hidden" name="stakeholder_kind" value={role}/><label>Your full name<input required name="full_name" autoComplete="name"/></label><div className="form-row"><label>Phone number<input required name="phone" type="tel" autoComplete="tel"/></label><label>Permanent address<input required name="permanent_address" autoComplete="street-address"/></label></div>{role === 'landlord' ? <><BrandingFields defaultBusinessName=""/><label>Yemilaz Properties access code<input required name="invite_code" autoComplete="one-time-code" placeholder="Enter your one-time invitation code"/><small>Landlord accounts require a current administrator-issued code.</small></label></> : <p className="setup-note">{role === 'tenant' ? 'Your landlord can see your tenancy record, while you can view your own lease, assigned contacts, documents, and complaints.' : inviteRole ? 'Your profile will be linked to the caretaker or agent record registered by your landlord.' : 'Complaint accounts can access only cases you submit or are invited to participate in.'}</p>}</>}<label>Email address<input ref={emailRef} required name="email" type="email" autoComplete="email" placeholder="you@example.com" defaultValue={createAccount ? invitedEmail : ''} readOnly={Boolean(createAccount && invitedEmail)}/></label><label>Password<input required name="password" type={showPassword ? 'text' : 'password'} autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={createAccount ? 8 : undefined} placeholder={createAccount ? 'At least 8 characters' : 'Your password'}/></label><label className="show-password"><input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)}/> Show password</label>{!createAccount && <button type="button" className="auth-toggle" onClick={() => onForgotPassword(emailRef.current?.value?.trim())}>Forgot password?</button>}<div className="modal-footer auth-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={signing}><KeyRound size={15}/>{signing ? (createAccount ? 'Creating…' : 'Signing in…') : (createAccount ? 'Create account' : 'Sign in')}</button></div><div className="auth-toggle-row">{createAccount ? <button type="button" className="auth-toggle" onClick={() => setCreateAccount(false)}>Already have an account? Sign in</button> : <><button type="button" className="auth-toggle" onClick={() => { setRole('landlord'); setCreateAccount(true); }}>New landlord</button><button type="button" className="auth-toggle" onClick={() => { setRole('tenant'); setCreateAccount(true); }}>Tenant sign up</button><button type="button" className="auth-toggle" onClick={() => { setRole('stakeholder'); setCreateAccount(true); }}>Other complainant</button></>}</div></form></div>;
 }
 
 function AuthNoticeDialog({ notice, onClose, onResend, onUpdatePassword, signing }) {
@@ -1044,6 +1105,17 @@ function PropertyGallery({ property }) {
 function ComplaintInbox({ records, activeComplaint, setActiveComplaint, messages, onSend, onResolution, currentUserId, onNew }) {
   const ownProposal = activeComplaint?.resolution_proposed_by === currentUserId;
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">PRIVATE CASE WORKSPACE</div><h1>Complaint room</h1><p>Keep a written record of each concern. A case is resolved only after the other participant approves.</p></div>{!activeComplaint && <button className="primary-button" onClick={onNew}><Plus size={16}/> Lodge a complaint</button>}</div>{activeComplaint ? <div className="panel complaint-thread"><button className="text-button" onClick={() => setActiveComplaint(null)}>← All complaints</button><div className="panel-heading"><div><span className="eyebrow">CASE {activeComplaint.reference_code}</span><h2>{activeComplaint.subject}</h2><p>{activeComplaint.complainant_name} · {activeComplaint.property_address} · {activeComplaint.status}</p></div></div><p className="complaint-original">{activeComplaint.details}</p><div className="thread-messages">{messages.map((item) => <article className={`thread-message ${item.sender_id === currentUserId ? 'from-manager' : ''}`} key={item.id}><p>{item.message}</p><small>{item.sender_id === currentUserId ? 'You' : 'Other participant'} · {new Date(item.created_at).toLocaleString()}</small></article>)}{!messages.length && <p className="empty-state">No replies yet. Send a message to continue the conversation.</p>}</div>{activeComplaint.status !== 'resolved' && activeComplaint.status !== 'closed' && <><form className="thread-reply" onSubmit={onSend}><label htmlFor="complaint-message">Reply to this case</label><textarea id="complaint-message" name="message" required maxLength="5000" rows="3" placeholder="Write a clear, respectful reply…"/><button className="primary-button">Send reply</button></form><div className="resolution-actions">{activeComplaint.resolution_proposed_at && !ownProposal && <><button className="primary-button" onClick={() => onResolution('approve')}>Approve proposed resolution</button><button className="secondary-button" onClick={() => onResolution('rework')}>Request more work</button></>}{ownProposal && <p>Your resolution proposal is waiting for the other participant’s approval.</p>}{!activeComplaint.resolution_proposed_at && <button className="secondary-button" onClick={() => onResolution('propose')}>Propose resolution</button>}</div></>}</div> : <div className="panel management-panel"><div className="table-wrap"><table><thead><tr><th>REFERENCE</th><th>SUBJECT</th><th>COMPLAINANT</th><th>PROPERTY</th><th>STATUS</th><th>DATE</th><th/></tr></thead><tbody>{records.map((item) => <tr key={item.id}><td>{item.reference_code}</td><td>{item.subject}</td><td>{item.complainant_name}</td><td>{item.property_address}</td><td>{item.resolution_approved_at ? 'Resolved by both' : item.resolution_proposed_at ? 'Awaiting approval' : item.status}</td><td>{new Date(item.created_at).toLocaleDateString()}</td><td><button className="secondary-button compact-button" onClick={() => setActiveComplaint(item)}>Open conversation</button></td></tr>)}</tbody></table>{!records.length && <EmptyState title="No linked complaints yet" text="Complaints linked to a property in your account will appear here."/>}</div></div>}</section>;
+}
+
+function StaffPortal({ auth, role, staff, tenants, properties, onSignOut, toast, onClearToast }) {
+  const roleLabel = role === 'caretaker' ? 'Caretaker' : 'Agent';
+  return <div className="brand-site theme-jade"><header className="portal-header"><BrandLockup name="Yemilaz Properties" logo="horizon"/><div><span>{auth.email}</span><button className="secondary-button" onClick={onSignOut}>Sign out</button></div></header><main className="stakeholder-portal">
+    <section className="panel tenant-profile-card"><div><span className="eyebrow">{roleLabel.toUpperCase()} PROFILE</span><h1>Welcome, {staff?.full_name || auth.user_metadata?.full_name || roleLabel}</h1><p>Your personal property workspace and assignments are shown here.</p></div></section>
+    <div className="tenant-profile-grid"><section className="panel tenant-profile-section"><span className="eyebrow">YOUR CONTACT DETAILS</span><h2>{staff?.full_name || 'Profile details loading'}</h2><p>{staff?.email || auth.email}</p><p>{staff?.phone || 'Add a phone number through your property manager.'}</p><p>{staff?.permanent_address || 'Permanent address not provided.'}</p></section><section className="panel tenant-profile-section"><span className="eyebrow">YOUR ROLE</span><h2>{roleLabel}</h2><p>Use this account only for your own assigned work. Contact the landlord if you need your assignments or registered details updated.</p><div className="tenant-profile-facts"><span>Assigned properties <b>{properties.length}</b></span><span>Assigned tenants <b>{tenants.length}</b></span></div></section></div>
+    <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">PROPERTY WORKSPACE</span><h2>Assigned properties</h2></div></div>{properties.length ? <div className="property-grid">{properties.map((property) => <article className="panel tenant-profile-section" key={property.id}><span className="eyebrow">{property.status || 'Property'}</span><h2>{property.name}</h2><p>{[property.address, property.city, property.state, property.country].filter(Boolean).join(', ') || 'Address not provided'}</p></article>)}</div> : <p>No properties have been assigned to you yet.</p>}</section>
+    <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">YOUR ASSIGNMENTS</span><h2>Tenants you support</h2></div></div>{tenants.length ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>EMAIL</th><th>PHONE</th><th>LEASE</th><th>PROPERTY</th></tr></thead><tbody>{tenants.map((tenant) => <tr key={tenant.id}><td>{tenant.full_name}</td><td>{tenant.email || '—'}</td><td>{tenant.phone || '—'}</td><td>{dateLabel(tenant.lease_start)} – {dateLabel(tenant.lease_end)}</td><td>{properties.find((property) => property.id === tenant.property_id)?.name || 'Not allocated'}</td></tr>)}</tbody></table></div> : <EmptyState title="No tenants assigned" text="Your landlord can assign you to tenants from the tenant directory."/>}</section>
+    {toast && <div className="toast"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={onClearToast}><X size={15}/></button></div>}
+  </main></div>;
 }
 
 function StakeholderPortal({ auth, role, tenant, contacts, cases, activeComplaint, setActiveComplaint, messages, onSend, onResolution, properties, onSubmitComplaint, onSignOut, toast, onClearToast, onDownloadDocuments, tenantDocsBusy }) {

@@ -215,4 +215,49 @@ app.post('/api/tenant-packets', async (req, res) => {
   }
 });
 
+app.post('/api/profile-invitations', async (req, res) => {
+  if (!configReady('email')) return res.status(503).json({ error: 'Invitation email is not configured on the document service.' });
+  const accessToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!accessToken) return res.status(401).json({ error: 'Sign in as the landlord before sending an invitation.' });
+  const user = await authenticate(accessToken);
+  if (!user?.id) return res.status(401).json({ error: 'Your session has expired. Sign in again.' });
+  const origin = req.headers.origin;
+  if (!origin || !allowedOrigins.includes(origin)) return res.status(403).json({ error: 'This website is not allowed to send account invitations.' });
+  const role = String(req.body?.role || '').toLowerCase();
+  const recordId = String(req.body?.recordId || '');
+  if (!['tenant', 'agent', 'caretaker'].includes(role) || !/^[0-9a-f-]{36}$/i.test(recordId)) {
+    return res.status(400).json({ error: 'Choose a valid tenant, agent, or caretaker record.' });
+  }
+
+  try {
+    const table = role === 'tenant' ? 'tenants' : 'staff';
+    const columns = role === 'tenant' ? 'id,owner_id,full_name,email' : 'id,owner_id,full_name,email,role';
+    const rows = await supabaseRequest(`${table}?id=eq.${recordId}&owner_id=eq.${user.id}&select=${columns}`, accessToken);
+    const person = rows?.[0];
+    if (!person || (role !== 'tenant' && person.role !== role)) return res.status(404).json({ error: 'That person is not registered in your account.' });
+    if (!person.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(person.email)) return res.status(422).json({ error: 'Add a valid email address to this person’s record first.' });
+
+    const joinUrl = new URL('/', origin);
+    joinUrl.searchParams.set('join', role);
+    joinUrl.searchParams.set('email', person.email);
+    const roleLabel = role === 'tenant' ? 'tenant' : role;
+    const safeName = String(person.full_name || 'there').replace(/[<>"'&]/g, '');
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST', headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: sender, to: [person.email],
+        subject: `Your ${roleLabel} profile invitation | Yemilaz Properties`,
+        text: `Hello ${safeName},\n\nYour property manager has invited you to create a ${roleLabel} profile on Yemilaz Properties. Use this secure signup link, then confirm your email to activate your account:\n\n${joinUrl.toString()}\n\nUse this invitation only if you expected it. If you have questions, contact your property manager.\n\nYemilaz Properties`,
+        html: `<div style="font-family:Arial,sans-serif;color:#24312f;max-width:600px;margin:auto;padding:32px"><div style="font-size:12px;letter-spacing:2px;color:#b08c4d;font-weight:bold">YEMILAZ PROPERTIES</div><h1 style="font-size:26px;margin:24px 0 12px">Your ${roleLabel} profile is ready</h1><p>Hello ${safeName},</p><p>Your property manager has invited you to create a ${roleLabel} profile. You can sign in to view the information and tools assigned to you.</p><p style="margin:28px 0"><a href="${joinUrl.toString()}" style="display:inline-block;background:#15574f;color:white;text-decoration:none;padding:14px 22px;border-radius:8px;font-weight:bold">Create your profile</a></p><p>After signing up, confirm your email address to activate your account. If you were not expecting this invitation, contact your property manager before continuing.</p><p style="margin-top:32px;color:#777;font-size:12px">Yemilaz Properties · Property management</p></div>`,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || result.error || `Email provider returned ${response.status}`);
+    res.json({ sent: true, email: person.email });
+  } catch (error) {
+    console.error('Profile invitation failed:', error.message);
+    res.status(500).json({ error: 'The invitation could not be sent. Check the email service configuration and try again.' });
+  }
+});
+
 app.listen(port, () => console.log(`Yemilaz document service listening on ${port}`));
