@@ -644,6 +644,17 @@ function App() {
     if (!auth || !supabase || !editingPerson) return;
     const form = new FormData(event.currentTarget);
     const kind = editingPerson.kind;
+    if (kind === 'charge') {
+      const status = form.get('status');
+      const tenant = tenants.find((item) => item.id === form.get('tenant_id'));
+      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status, edited_at: new Date().toISOString(), edited_by: auth.id };
+      setSaving(true);
+      const { data, error } = await supabase.from('service_charges').update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
+      setSaving(false);
+      if (error) { setToast(error.message); return; }
+      setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
+      setEditingPerson(null); setToast('Transaction updated and saved.'); return;
+    }
     const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
     const row = kind === 'tenant'
       ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, rent_amount: Number(form.get('rent_amount') || 0), lease_start: form.get('lease_start') || null, lease_end: form.get('lease_end') || null, notes: form.get('notes') || null }
@@ -658,6 +669,18 @@ function App() {
     else if (kind === 'staff') { setStaffRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); }
     else setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
     setEditingPerson(null); setToast('Contact details updated.');
+  }
+
+  async function voidTransaction(record) {
+    if (!auth || !supabase || record.status === 'voided') return;
+    const reason = window.prompt(`Why are you voiding “${record.description}”? This reason is kept in the transaction history.`);
+    if (reason === null) return;
+    if (!reason.trim()) { setToast('Enter a reason to void this transaction.'); return; }
+    if (!window.confirm(`Void this transaction for ${currency(record.amount)}? It stays in your records and is excluded from payment totals.`)) return;
+    const { data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single();
+    if (error) { setToast(error.message); return; }
+    setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
+    setToast('Transaction voided. Its history has been kept.');
   }
 
   async function deletePerson(record, kind) {
@@ -720,7 +743,7 @@ function App() {
           onUpdateListingReport={updateListingReport}
           onUpdatePropertyStatus={updatePropertyStatus}
           onAllocate={(tenant) => { if (!auth) { setAuthModal(true); return; } setAllocationTenant(tenant); }}
-          onRecordPayment={() => setPage('Payments & charges')} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant}
+          onRecordPayment={() => setPage('Payments & charges')} onEditTransaction={(record) => setEditingPerson({ ...record, kind: 'charge' })} onVoidTransaction={voidTransaction} onSendPacket={sendTenantPackets} sendingTenant={sendingTenant}
           onDownloadPdfs={downloadTenantPdfs} downloadingTenant={downloadingTenant} hasPaid={paidForTenant}
         />}
         <footer className="site-footer"><span>© {new Date().getFullYear()} {landlordProfile?.business_name || 'Yemilaz Properties'}</span><span>A private property workspace on Yemilaz Properties.</span></footer>
@@ -766,7 +789,8 @@ function App() {
       <div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setModal(false)}>Cancel</button><button className="primary-button" disabled={saving}><Plus size={16}/>{saving ? 'Saving…' : 'Save record'}</button></div>
     </form></div>}
 
-    {editingPerson && <EditPersonModal person={editingPerson} saving={saving} onSave={savePersonEdit} onClose={() => setEditingPerson(null)}/>}
+    {editingPerson?.kind === 'charge' && <TransactionEditModal transaction={editingPerson} tenants={tenants} saving={saving} onSave={savePersonEdit} onClose={() => setEditingPerson(null)}/>}
+    {editingPerson && editingPerson.kind !== 'charge' && <EditPersonModal person={editingPerson} saving={saving} onSave={savePersonEdit} onClose={() => setEditingPerson(null)}/>}
 
     {allocationTenant && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAllocationTenant(null)}><form className="modal" onSubmit={allocateProperty}><div className="modal-heading"><div><span className="eyebrow">PROPERTY ALLOCATION</span><h2>{allocationTenant.property_id ? 'Change tenant property' : 'Allocate a property'}</h2><p>{allocationTenant.full_name} · allocation is available after a rent or deposit payment is recorded.</p></div><button type="button" className="icon-button" onClick={() => setAllocationTenant(null)}><X size={19}/></button></div><label>Available property<select required name="property_id" defaultValue=""><option value="">Select a property</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select></label>{!paidForTenant(allocationTenant.id) && <p className="setup-note">Record a paid rent or deposit under Payments & charges before allocating a property.</p>}<div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setAllocationTenant(null)}>Cancel</button><button className="primary-button" disabled={saving || !paidForTenant(allocationTenant.id)}>Allocate property</button></div></form></div>}
 
@@ -1090,7 +1114,19 @@ function EditPersonModal({ person, saving, onSave, onClose }) {
   </form></div>;
 }
 
-function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onEditPerson, onDeletePerson, onToggleAdvertisement, onRequestVerification, onUpdateViewingStatus, onUpdateListingReport, onUpdatePropertyStatus, onAllocate, onRecordPayment, onSendPacket, sendingTenant, onDownloadPdfs, downloadingTenant, hasPaid }) {
+function TransactionEditModal({ transaction, tenants, saving, onSave, onClose }) {
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={onSave}>
+    <div className="modal-heading"><div><span className="eyebrow">PAYMENTS &amp; CHARGES</span><h2>Edit transaction</h2><p>Update the record. Voided transactions remain in the audit history.</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>
+    <label>Description<input required name="description" defaultValue={transaction.description}/></label>
+    <div className="form-row"><label>Tenant<select name="tenant_id" defaultValue={transaction.tenant_id || ''}><option value="">Property / general charge</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name}</option>)}</select></label><label>Category<select name="category" defaultValue={transaction.category || 'other'}><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="utilities">Utilities</option><option value="maintenance">Maintenance</option><option value="security">Security</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></label></div>
+    <label>Amount (₦)<input required name="amount" type="number" min="0" step="0.01" defaultValue={transaction.amount}/></label>
+    <div className="form-row"><label>Status<select name="status" defaultValue={transaction.status}><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="waived">Waived</option></select></label><label>Due date<input name="due_date" type="date" defaultValue={transaction.due_date || ''}/></label></div>
+    <label>Paid date<input name="paid_at" type="date" defaultValue={transaction.paid_at || ''}/></label>
+    <div className="modal-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
+  </form></div>;
+}
+
+function ManagementPage({ page, tenants, records, query, setQuery, openModal, onDeleteProperty, onEditPerson, onDeletePerson, onToggleAdvertisement, onRequestVerification, onUpdateViewingStatus, onUpdateListingReport, onUpdatePropertyStatus, onAllocate, onRecordPayment, onEditTransaction, onVoidTransaction, onSendPacket, sendingTenant, onDownloadPdfs, downloadingTenant, hasPaid }) {
   const copy = {
     Properties: ['Property portfolio', 'Delete properties, manage availability, and choose which available homes appear on the dashboard.'],
     Tenants: ['Tenant directory', 'Register tenants, record payments, and allocate available properties after payment.'],
@@ -1105,7 +1141,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
   }[page] || ['Portfolio overview', 'Your properties at a glance.'];
   const columns = {
     Properties: [['Property', 'name'], ['Type', 'property_type'], ['City', 'city'], ['State / province', 'state'], ['Country', 'country'], ['Listing', 'listing_type'], ['Price', 'price'], ['Views', 'view_count'], ['Availability', 'status'], ['Verification', 'verification_status']],
-    'Payments & charges': [['Description', 'description'], ['Tenant', 'tenant_name'], ['Category', 'category'], ['Amount', 'amount'], ['Due date', 'due_date'], ['Status', 'status']],
+    'Payments & charges': [['Description', 'description'], ['Tenant', 'tenant_name'], ['Category', 'category'], ['Amount', 'amount'], ['Due date', 'due_date'], ['Paid date', 'paid_at'], ['Status', 'status']],
     Guarantors: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Relationship', 'relationship']],
     Caretakers: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
     Agents: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
@@ -1123,9 +1159,10 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
     if (key === 'budget') return item ? currency(item) : 'Flexible';
     if (key === 'request_location') return [record.city, record.state, record.country].filter(Boolean).join(', ');
     if (key === 'tenant_name') return tenants.find((tenant) => tenant.id === item.tenant_id)?.full_name || 'General/property charge';
-    if (key === 'status') return item === 'available' ? 'Available' : item === 'occupied' ? 'Rented' : item === 'reserved' || item === 'under_offer' ? 'Reserved' : item === 'sold' ? 'Sold' : item || '—';
+    if (key === 'status') return item === 'available' ? 'Available' : item === 'occupied' ? 'Rented' : item === 'reserved' || item === 'under_offer' ? 'Reserved' : item === 'sold' ? 'Sold' : item === 'paid' ? 'Paid' : item === 'unpaid' ? 'Unpaid' : item === 'waived' ? 'Waived' : item === 'voided' ? 'Voided' : item || '—';
     if (key === 'listing_type') return item === 'sale' ? 'Buy' : item === 'rent' ? 'Rent' : item || '—';
     if (key === 'created_at' || key === 'requested_at') return item ? new Date(item).toLocaleString() : '—';
+    if (key === 'paid_at' || key === 'due_date') return item ? dateLabel(item) : '—';
     return item || '—';
   };
   const canAdd = ['Tenants','Properties','Payments & charges','Guarantors','Caretakers','Agents'].includes(page);
@@ -1133,7 +1170,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">WORKSPACE / {page.toUpperCase()}</div><h1>{copy[0]}</h1><p>{copy[1]}</p></div>{canAdd && <button className="primary-button" onClick={openModal}><Plus size={17}/>{page === 'Tenants' ? 'Register a tenant' : page === 'Properties' ? 'Add a property' : page === 'Payments & charges' ? 'Record a payment' : 'Add a record'}</button>}</div>
     <div className="panel management-panel"><div className="panel-heading"><div><h2>{page}</h2><span className="management-sub">{page === 'Tenants' ? `${tenants.length} tenant records` : `${records.length} records`}</span></div><button className="filter-button" onClick={onRecordPayment}><Filter size={15}/> Filters <ChevronDown size={13}/></button></div><label className="search-box wide-search"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${page.toLowerCase()}...`}/></label>
       {page === 'Tenants' ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>PROPERTY</th><th>LEASE START</th><th>STATUS</th><th>RENT</th><th>PAYMENT</th><th>ACTION</th></tr></thead><tbody>{tenants.filter((tenant) => `${tenant.name} ${tenant.property}`.toLowerCase().includes(query.toLowerCase())).map((tenant, index) => <tr key={tenant.id}><td><div className="tenant-cell"><div className={`tenant-avatar avatar-${index % 4}`}>{tenant.initials}</div><b>{tenant.name}</b></div></td><td>{tenant.property}</td><td>{tenant.date}</td><td><span className={`status ${tenant.displayStatus === 'Active' ? 'active' : 'renewal'}`}><i/>{tenant.displayStatus}</span></td><td className="rent-cell">{tenant.rent}</td><td>{hasPaid(tenant.id) ? 'Payment recorded' : 'No payment'}</td><td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => hasPaid(tenant.id) ? onAllocate(tenant) : onRecordPayment()}>{tenant.property_id ? 'Change property' : hasPaid(tenant.id) ? 'Allocate' : 'Record payment'}</button><button className="secondary-button compact-button" disabled={sendingTenant === tenant.id} onClick={() => onSendPacket(tenant.id)}>{sendingTenant === tenant.id ? 'Sending…' : 'Send PDFs'}</button><button className="secondary-button compact-button" disabled={downloadingTenant === tenant.id} onClick={() => onDownloadPdfs(tenant.id)}>{downloadingTenant === tenant.id ? 'Generating…' : 'Download PDFs'}</button><button className="secondary-button compact-button" onClick={() => onEditPerson(tenant, 'tenant')}>Edit</button><button className="danger-button" onClick={() => onDeletePerson(tenant, 'tenant')}><Trash2 size={15}/><span>Delete</span></button></div></td></tr>)}</tbody></table>{tenants.length === 0 && <EmptyState title="No tenants yet" text="Register a tenant to start recording leases and payments."/>}</div>
-      : filtered.length ? <div className="table-wrap"><table><thead><tr>{columns.map(([label]) => <th key={label}>{label.toUpperCase()}</th>)}{['Properties','Guarantors','Caretakers','Agents','Property requests'].includes(page) && <th>ACTION</th>}</tr></thead><tbody>{filtered.map((record, index) => <tr key={record.id || index}>{columns.map(([label, key]) => <td key={key}>{renderCell(record, key)}</td>)}{['Guarantors','Caretakers','Agents'].includes(page) && <td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => onEditPerson(record, page === 'Guarantors' ? 'guarantor' : 'staff')}>Edit</button><button className="danger-button" onClick={() => onDeletePerson(record, page === 'Guarantors' ? 'guarantor' : 'staff')}><Trash2 size={15}/><span>Delete</span></button></div></td>}{page === 'Property requests' && <td><div className="row-actions"><a className="secondary-button compact-button" href={`mailto:${encodeURIComponent(record.requester_email)}?subject=${encodeURIComponent('Your property request on Yemilaz Properties')}`}>Email requester</a></div></td>}{page === 'Properties' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status !== 'available'} onClick={() => onToggleAdvertisement(record)}>{record.is_advertised ? 'Hide ad' : 'Advertise'}</button><button className="secondary-button compact-button" disabled={record.verification_status === 'verified' || record.verification_status === 'pending'} onClick={() => onRequestVerification(record)}>{record.verification_status === 'verified' ? 'Verified' : record.verification_status === 'pending' ? 'Review pending' : 'Request verification'}</button><button className="danger-button" title={`Delete ${record.name}`} onClick={() => onDeleteProperty(record)}><Trash2 size={15}/><span>Delete</span></button></div></td>}</tr>)}</tbody></table></div>
+      : filtered.length ? <div className="table-wrap"><table><thead><tr>{columns.map(([label]) => <th key={label}>{label.toUpperCase()}</th>)}{['Properties','Guarantors','Caretakers','Agents','Property requests','Payments & charges'].includes(page) && <th>ACTION</th>}</tr></thead><tbody>{filtered.map((record, index) => <tr key={record.id || index}>{columns.map(([label, key]) => <td key={key}>{renderCell(record, key)}</td>)}{page === 'Payments & charges' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status === 'voided'} onClick={() => onEditTransaction(record)}>Edit</button><button className="danger-button" disabled={record.status === 'voided'} onClick={() => onVoidTransaction(record)}><span>{record.status === 'voided' ? 'Voided' : 'Void'}</span></button></div></td>}{['Guarantors','Caretakers','Agents'].includes(page) && <td><div className="row-actions"><button className="secondary-button compact-button" onClick={() => onEditPerson(record, page === 'Guarantors' ? 'guarantor' : 'staff')}>Edit</button><button className="danger-button" onClick={() => onDeletePerson(record, page === 'Guarantors' ? 'guarantor' : 'staff')}><Trash2 size={15}/><span>Delete</span></button></div></td>}{page === 'Property requests' && <td><div className="row-actions"><a className="secondary-button compact-button" href={`mailto:${encodeURIComponent(record.requester_email)}?subject=${encodeURIComponent('Your property request on Yemilaz Properties')}`}>Email requester</a></div></td>}{page === 'Properties' && <td><div className="row-actions"><button className="secondary-button compact-button" disabled={record.status !== 'available'} onClick={() => onToggleAdvertisement(record)}>{record.is_advertised ? 'Hide ad' : 'Advertise'}</button><button className="secondary-button compact-button" disabled={record.verification_status === 'verified' || record.verification_status === 'pending'} onClick={() => onRequestVerification(record)}>{record.verification_status === 'verified' ? 'Verified' : record.verification_status === 'pending' ? 'Review pending' : 'Request verification'}</button><button className="danger-button" title={`Delete ${record.name}`} onClick={() => onDeleteProperty(record)}><Trash2 size={15}/><span>Delete</span></button></div></td>}</tr>)}</tbody></table></div>
       : <EmptyState title={page === 'Property requests' ? 'No property requests yet' : `No ${page.toLowerCase()} yet`} text={page === 'Properties' ? 'Add a property, then choose whether to advertise it on the dashboard.' : page === 'Payments & charges' ? 'Record rent, deposit and service payments here.' : page === 'Property requests' ? 'New requests from visitors will appear here while your account is opted in under Landlord profile.' : `Add your first ${page.toLowerCase()} record to get started.`} action={canAdd ? openModal : undefined}/>}</div>
     </section>;
 }
