@@ -125,6 +125,8 @@ function App() {
       const joinRole = new URLSearchParams(window.location.search).get('join');
       if (!user && ['tenant', 'agent', 'caretaker'].includes(joinRole)) setAuthModal(true);
       if (user) {
+        const { data: admin } = await supabase.rpc('is_platform_admin');
+        if (active) setIsPlatformAdmin(admin === true);
         const { data: profile } = await supabase.from('stakeholder_profiles').select('user_id,role,staff_id').eq('user_id', user.id).maybeSingle();
         if (active) setAccountRole(profile?.role || 'landlord');
       }
@@ -396,9 +398,9 @@ function App() {
     if (!['Complaints','Property requests'].includes(page)) request = request.eq('owner_id', auth.id);
     if (page === 'Caretakers') request = request.eq('role', 'caretaker');
     if (page === 'Agents') request = request.eq('role', 'agent');
-    if (page === 'Complaints') request = request.eq('landlord_id', auth.id);
+    if (page === 'Complaints' && !isPlatformAdmin) request = request.eq('landlord_id', auth.id);
     request.then(({ data, error }) => { if (error) setToast(error.message); else setRecords((data || []).map((item) => ({ ...item, property_name: propertyRecords.find((property) => property.id === item.property_id)?.name || 'Property listing' }))); });
-  }, [auth, page, propertyRecords, paymentRecords]);
+  }, [auth, page, propertyRecords, paymentRecords, isPlatformAdmin]);
 
   useEffect(() => {
     if (!activeComplaint || !supabase) { setComplaintMessages([]); return; }
