@@ -56,6 +56,7 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 18. [`supabase/migrations/20261117_property_communication_roles.sql`](supabase/migrations/20261117_property_communication_roles.sql)
 19. [`supabase/migrations/20261118_fix_property_contact_rpc_types.sql`](supabase/migrations/20261118_fix_property_contact_rpc_types.sql)
 20. [`supabase/migrations/20261119_property_message_notifications.sql`](supabase/migrations/20261119_property_message_notifications.sql)
+21. [`supabase/migrations/20261120_universal_property_categories.sql`](supabase/migrations/20261120_universal_property_categories.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -65,6 +66,8 @@ The fourth migration adds country and state/province fields to property listings
 
 The fifth migration adds a per-landlord business name, logo mark, and professional colour template. New landlords choose these while creating an account; existing landlords can change them under **Landlord profile**. The public Yemilaz homepage and favicon use the Horizon Homes mark. Each signed-in workspace displays the landlord’s own brand while retaining Yemilaz Properties as its hosting platform.
 
+Listings support residential homes, shops and retail, offices, stores and warehouses, industrial/workshop spaces, hospitality and mixed-use buildings, residential/commercial plots, farms, parking, and event spaces. Owners can offer a property for rent/lease or sale. Optional size and suitable-use details work across property types; bedroom and bathroom counts are relevant only to residential listings. Rental prices can be shown per day, week, month, or year.
+
 ### Role-based property communications
 
 Migration 18 adds the Lawyer staff role, lets landlords edit a staff member’s role (including syncing an already activated login), provides portfolio-wide lawyer contact access, a property contact directory and direct messages between linked landlords, tenants, lawyers, agents and caretakers. Tenants can file a continuing complaint with their landlord or assigned agent/caretaker. A landlord can disable direct tenant complaints in **Landlord profile**; in that case new tenant complaints must go to an assigned agent or caretaker, and the landlord is excluded from that case thread. Assigned agents and caretakers can reply and use the existing two-party resolution approval flow. Run migration 18 after migrations 1–17 before deploying the updated app and invitation service.
@@ -72,6 +75,8 @@ Migration 18 adds the Lawyer staff role, lets landlords edit a staff member’s 
 Migration 19 corrects the PostgreSQL result-column types returned by the complaint-recipient and property-conversation RPC functions. If migration 18 has already been applied, run migration 19 alone in Supabase SQL Editor to fix the `structure of query does not match function result type` error shown in tenant and caretaker/agent portals.
 
 Migration 20 creates in-app notifications when a property message or complaint reply is sent. Each recipient sees notifications in their account header; unread complaint replies also show a pending count on the complaint row, which clears when they open that conversation. Apply this migration in Supabase SQL Editor before deploying the frontend changes.
+
+Migration 21 adds property size, suitable-use, and rental price-period fields, and expands wanted-request categories to include residential, commercial, land, farm, and other property types. Run it in Supabase SQL Editor before deploying the updated frontend. Existing listings keep their current values and remain compatible.
 
 The sixth migration makes landlord account creation invitation-only. Each code is single-use, expires after a chosen period (1 hour to 7 days), and can be revoked. The code manager appears only to a platform administrator. After applying the migration, bootstrap the first administrator in SQL Editor by replacing `OWNER_EMAIL_HERE` with the email on the Yemilaz Properties owner account:
 
