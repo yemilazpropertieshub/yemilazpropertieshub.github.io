@@ -53,6 +53,7 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 15. [`supabase/migrations/20261114_fix_tenant_rls_recursion.sql`](supabase/migrations/20261114_fix_tenant_rls_recursion.sql)
 16. [`supabase/migrations/20261115_property_operations_suite.sql`](supabase/migrations/20261115_property_operations_suite.sql)
 17. [`supabase/migrations/20261116_accountability_and_operations.sql`](supabase/migrations/20261116_accountability_and_operations.sql)
+18. [`supabase/migrations/20261117_property_communication_roles.sql`](supabase/migrations/20261117_property_communication_roles.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -61,6 +62,10 @@ The third migration enables up to five public listing photos per property in the
 The fourth migration adds country and state/province fields to property listings. Nigeria and Lagos are selected by default. Country and first-level administrative-area dropdown options are loaded from the CountriesNow dataset; if its service is unavailable, the fields remain editable so listings can still be entered.
 
 The fifth migration adds a per-landlord business name, logo mark, and professional colour template. New landlords choose these while creating an account; existing landlords can change them under **Landlord profile**. The public Yemilaz homepage and favicon use the Horizon Homes mark. Each signed-in workspace displays the landlord’s own brand while retaining Yemilaz Properties as its hosting platform.
+
+### Role-based property communications
+
+Migration 18 adds the Lawyer staff role, lets landlords edit a staff member’s role (including syncing an already activated login), provides portfolio-wide lawyer contact access, a property contact directory and direct messages between linked landlords, tenants, lawyers, agents and caretakers. Tenants can file a continuing complaint with their landlord or assigned agent/caretaker. A landlord can disable direct tenant complaints in **Landlord profile**; in that case new tenant complaints must go to an assigned agent or caretaker, and the landlord is excluded from that case thread. Assigned agents and caretakers can reply and use the existing two-party resolution approval flow. Run migration 18 after migrations 1–17 before deploying the updated app and invitation service.
 
 The sixth migration makes landlord account creation invitation-only. Each code is single-use, expires after a chosen period (1 hour to 7 days), and can be revoked. The code manager appears only to a platform administrator. After applying the migration, bootstrap the first administrator in SQL Editor by replacing `OWNER_EMAIL_HERE` with the email on the Yemilaz Properties owner account:
 

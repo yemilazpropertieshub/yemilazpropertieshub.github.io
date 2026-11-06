@@ -225,8 +225,8 @@ app.post('/api/profile-invitations', async (req, res) => {
   if (!origin || !allowedOrigins.includes(origin)) return res.status(403).json({ error: 'This website is not allowed to send account invitations.' });
   const role = String(req.body?.role || '').toLowerCase();
   const recordId = String(req.body?.recordId || '');
-  if (!['tenant', 'agent', 'caretaker'].includes(role) || !/^[0-9a-f-]{36}$/i.test(recordId)) {
-    return res.status(400).json({ error: 'Choose a valid tenant, agent, or caretaker record.' });
+  if (!['tenant', 'agent', 'caretaker', 'lawyer'].includes(role) || !/^[0-9a-f-]{36}$/i.test(recordId)) {
+    return res.status(400).json({ error: 'Choose a valid tenant, agent, caretaker, or lawyer record.' });
   }
 
   try {
