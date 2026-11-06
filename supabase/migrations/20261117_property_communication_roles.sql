@@ -139,11 +139,39 @@ end; $$;
 revoke all on function public.current_property_message_owner() from public,anon;
 grant execute on function public.current_property_message_owner() to authenticated;
 
+-- Avoid tenant/staff policy recursion. These SECURITY DEFINER helpers perform
+-- the relationship lookups outside the callers' table policies.
+create or replace function public.user_is_assigned_to_tenant(p_tenant_id uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select auth.uid() is not null and exists (
+    select 1 from public.tenants t
+    join public.stakeholder_profiles sp on sp.user_id=auth.uid()
+    join public.staff s on s.id=sp.staff_id
+    where t.id=p_tenant_id and s.owner_id=t.owner_id
+      and (sp.role='lawyer' or t.agent_id=s.id or t.caretaker_id=s.id)
+  );
+$$;
+revoke all on function public.user_is_assigned_to_tenant(uuid) from public,anon;
+grant execute on function public.user_is_assigned_to_tenant(uuid) to authenticated;
+
+create or replace function public.user_can_view_staff(p_staff_id uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select auth.uid() is not null and exists (
+    select 1 from public.tenants t
+    where lower(t.email)=lower(auth.jwt()->>'email')
+      and (t.agent_id=p_staff_id or t.caretaker_id=p_staff_id)
+  );
+$$;
+revoke all on function public.user_can_view_staff(uuid) from public,anon;
+grant execute on function public.user_can_view_staff(uuid) to authenticated;
+
 -- Give lawyers portfolio-wide read access to property and tenant context, while agent/caretaker access stays assigned.
 drop policy if exists "Assigned staff view their tenants" on public.tenants;
-create policy "Assigned staff view their tenants" on public.tenants for select to authenticated using (
-  exists(select 1 from public.stakeholder_profiles sp join public.staff s on s.id=sp.staff_id where sp.user_id=auth.uid() and s.owner_id=tenants.owner_id and (sp.role='lawyer' or tenants.agent_id=s.id or tenants.caretaker_id=s.id))
-);
+create policy "Assigned staff view their tenants" on public.tenants for select to authenticated
+  using (public.user_is_assigned_to_tenant(id));
+drop policy if exists "Tenants view assigned staff" on public.staff;
+create policy "Tenants view assigned staff" on public.staff for select to authenticated
+  using (public.user_can_view_staff(id));
 drop policy if exists "Assigned staff view related properties" on public.properties;
 create policy "Assigned staff view related properties" on public.properties for select to authenticated using (
   exists(select 1 from public.stakeholder_profiles sp join public.staff s on s.id=sp.staff_id where sp.user_id=auth.uid() and s.owner_id=properties.owner_id and (sp.role='lawyer' or s.property_id=properties.id or exists(select 1 from public.tenants t where t.owner_id=s.owner_id and t.property_id=properties.id and (t.agent_id=s.id or t.caretaker_id=s.id))))
