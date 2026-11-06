@@ -54,6 +54,7 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 16. [`supabase/migrations/20261115_property_operations_suite.sql`](supabase/migrations/20261115_property_operations_suite.sql)
 17. [`supabase/migrations/20261116_accountability_and_operations.sql`](supabase/migrations/20261116_accountability_and_operations.sql)
 18. [`supabase/migrations/20261117_property_communication_roles.sql`](supabase/migrations/20261117_property_communication_roles.sql)
+19. [`supabase/migrations/20261118_fix_property_contact_rpc_types.sql`](supabase/migrations/20261118_fix_property_contact_rpc_types.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -66,6 +67,8 @@ The fifth migration adds a per-landlord business name, logo mark, and profession
 ### Role-based property communications
 
 Migration 18 adds the Lawyer staff role, lets landlords edit a staff member’s role (including syncing an already activated login), provides portfolio-wide lawyer contact access, a property contact directory and direct messages between linked landlords, tenants, lawyers, agents and caretakers. Tenants can file a continuing complaint with their landlord or assigned agent/caretaker. A landlord can disable direct tenant complaints in **Landlord profile**; in that case new tenant complaints must go to an assigned agent or caretaker, and the landlord is excluded from that case thread. Assigned agents and caretakers can reply and use the existing two-party resolution approval flow. Run migration 18 after migrations 1–17 before deploying the updated app and invitation service.
+
+Migration 19 corrects the PostgreSQL result-column types returned by the complaint-recipient and property-conversation RPC functions. If migration 18 has already been applied, run migration 19 alone in Supabase SQL Editor to fix the `structure of query does not match function result type` error shown in tenant and caretaker/agent portals.
 
 The sixth migration makes landlord account creation invitation-only. Each code is single-use, expires after a chosen period (1 hour to 7 days), and can be revoked. The code manager appears only to a platform administrator. After applying the migration, bootstrap the first administrator in SQL Editor by replacing `OWNER_EMAIL_HERE` with the email on the Yemilaz Properties owner account:
 

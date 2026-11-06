@@ -83,29 +83,29 @@ begin
   end if;
   if v_owner is null then return; end if;
   if v_role is null or v_role='landlord' then
-    return query select u.id,t.id,t.full_name,t.email,t.property_id,'tenant'::text from public.tenants t join auth.users u on lower(u.email)=lower(t.email) where t.owner_id=v_owner
+    return query select u.id,t.id,t.full_name::text,t.email::text,t.property_id,'tenant'::text from public.tenants t join auth.users u on lower(u.email)=lower(t.email) where t.owner_id=v_owner
       union all
-      select u.id,null::uuid,s.full_name,s.email,s.property_id,s.role from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner;
+      select u.id,null::uuid,s.full_name::text,s.email::text,s.property_id,s.role::text from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner;
   elsif v_role='lawyer' then
-    return query select v_owner,null::uuid,coalesce(lp.full_name,lp.business_name),u.email,null::uuid,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_owner
+    return query select v_owner,null::uuid,coalesce(lp.full_name,lp.business_name)::text,u.email::text,null::uuid,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_owner
       union all
-      select u.id,t.id,t.full_name,t.email,t.property_id,'tenant'::text from public.tenants t join auth.users u on lower(u.email)=lower(t.email) where t.owner_id=v_owner
+      select u.id,t.id,t.full_name::text,t.email::text,t.property_id,'tenant'::text from public.tenants t join auth.users u on lower(u.email)=lower(t.email) where t.owner_id=v_owner
       union all
-      select u.id,null::uuid,s.full_name,s.email,s.property_id,s.role from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner;
+      select u.id,null::uuid,s.full_name::text,s.email::text,s.property_id,s.role::text from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner;
   elsif v_role='tenant' then
     return query
-      select v_owner,null::uuid,coalesce(lp.full_name,lp.business_name),u.email,null::uuid,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_owner
+      select v_owner,null::uuid,coalesce(lp.full_name,lp.business_name)::text,u.email::text,null::uuid,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_owner
       union all
-      select u.id,t.id,s.full_name,s.email,s.property_id,s.role from public.tenants t join public.staff s on s.id=t.agent_id or s.id=t.caretaker_id join auth.users u on lower(u.email)=lower(s.email) where t.id=v_tenant and s.owner_id=v_owner
+      select u.id,t.id,s.full_name::text,s.email::text,s.property_id,s.role::text from public.tenants t join public.staff s on s.id=t.agent_id or s.id=t.caretaker_id join auth.users u on lower(u.email)=lower(s.email) where t.id=v_tenant and s.owner_id=v_owner
       union all
-      select u.id,null::uuid,s.full_name,s.email,s.property_id,'lawyer'::text from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner and s.role='lawyer';
+      select u.id,null::uuid,s.full_name::text,s.email::text,s.property_id,'lawyer'::text from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner and s.role='lawyer';
   else
     return query
-      select v_owner,null::uuid,coalesce(lp.full_name,lp.business_name),u.email,null::uuid,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_owner
+      select v_owner,null::uuid,coalesce(lp.full_name,lp.business_name)::text,u.email::text,null::uuid,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_owner
       union all
-      select u.id,t.id,t.full_name,t.email,t.property_id,'tenant'::text from public.tenants t join auth.users u on lower(u.email)=lower(t.email) where t.owner_id=v_owner and (t.agent_id=v_staff or t.caretaker_id=v_staff or exists(select 1 from public.tenants tx where tx.id=t.id and tx.property_id=(select s.property_id from public.staff s where s.id=v_staff)))
+      select u.id,t.id,t.full_name::text,t.email::text,t.property_id,'tenant'::text from public.tenants t join auth.users u on lower(u.email)=lower(t.email) where t.owner_id=v_owner and (t.agent_id=v_staff or t.caretaker_id=v_staff or exists(select 1 from public.tenants tx where tx.id=t.id and tx.property_id=(select s.property_id from public.staff s where s.id=v_staff)))
       union all
-      select u.id,null::uuid,s.full_name,s.email,s.property_id,s.role from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner and s.id<>v_staff and (v_role='lawyer' or s.role='lawyer' or s.property_id=(select sx.property_id from public.staff sx where sx.id=v_staff) or exists(select 1 from public.tenants t where t.owner_id=v_owner and t.agent_id in (s.id,v_staff) and t.caretaker_id in (s.id,v_staff)));
+      select u.id,null::uuid,s.full_name::text,s.email::text,s.property_id,s.role::text from public.staff s join auth.users u on lower(u.email)=lower(s.email) where s.owner_id=v_owner and s.id<>v_staff and (v_role='lawyer' or s.role='lawyer' or s.property_id=(select sx.property_id from public.staff sx where sx.id=v_staff) or exists(select 1 from public.tenants t where t.owner_id=v_owner and t.agent_id in (s.id,v_staff) and t.caretaker_id in (s.id,v_staff)));
   end if;
 end; $$;
 revoke all on function public.list_property_conversation_contacts() from public,anon;
@@ -120,9 +120,9 @@ begin
   if v_tenant.id is null then return; end if;
   select coalesce(lp.allow_direct_tenant_complaints,true) into v_allow from public.landlord_profiles lp where lp.user_id=v_tenant.owner_id;
   if coalesce(v_allow,true) then
-    return query select u.id,coalesce(lp.full_name,lp.business_name),u.email,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_tenant.owner_id;
+    return query select u.id,coalesce(lp.full_name,lp.business_name)::text,u.email::text,'landlord'::text from auth.users u left join public.landlord_profiles lp on lp.user_id=u.id where u.id=v_tenant.owner_id;
   end if;
-  return query select u.id,s.full_name,u.email,s.role from public.staff s join auth.users u on lower(u.email)=lower(s.email)
+  return query select u.id,s.full_name::text,u.email::text,s.role::text from public.staff s join auth.users u on lower(u.email)=lower(s.email)
     where s.owner_id=v_tenant.owner_id and s.role in ('agent','caretaker') and s.id in (v_tenant.agent_id,v_tenant.caretaker_id);
 end; $$;
 revoke all on function public.list_tenant_complaint_recipients() from public,anon;
