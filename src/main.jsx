@@ -764,9 +764,10 @@ function App() {
     };
     const insertQuery = supabase.from('property_complaints').insert(complaint);
     const { data, error } = auth ? await insertQuery.select().single() : await insertQuery;
-    if (error) { setToast('We could not submit your complaint. Please try again.'); return; }
-    if (data && accountRole === 'stakeholder') setStakeholderCases((current) => [data, ...current]);
+    if (error) { setToast('We could not submit your complaint. Please try again.'); return false; }
+    if (data && auth) setStakeholderCases((current) => [data, ...current]);
     formElement.reset(); setToast('Your complaint has been submitted securely. Our team will review it.');
+    return true;
   }
 
   async function savePersonEdit(event) {
@@ -1271,6 +1272,29 @@ function OperationsHub({ page, auth, tenants, properties, isAdmin }) {
 
 function StakeholderPortal({ auth, role, tenant, contacts, cases, activeComplaint, setActiveComplaint, messages, onSend, onResolution, properties, onSubmitComplaint, onSignOut, toast, onClearToast, onDownloadDocuments, tenantDocsBusy }) {
   const [newComplaint, setNewComplaint] = useState(false);
+  const isTenant = role === 'tenant';
+  const property = tenant?.property_id ? properties.find((item) => item.id === tenant.property_id) : null;
+  const roleLabel = isTenant ? 'Tenant' : 'Property member';
+
+  if (newComplaint) return <div className="brand-site theme-jade"><PublicComplaintRoom properties={properties} tenants={tenant ? [tenant] : []} roleDefault={isTenant ? 'Tenant' : ''} onBack={() => setNewComplaint(false)} onSubmit={async (event) => { const submitted = await onSubmitComplaint(event); if (submitted) setNewComplaint(false); }}/>{toast && <div className="toast"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={onClearToast}><X size={15}/></button></div>}</div>;
+
+  return <div className="brand-site theme-jade">
+    <header className="portal-header"><BrandLockup name="Yemilaz Properties" logo="horizon"/><div><span>{auth.email}</span><button className="secondary-button" onClick={onSignOut}><LogOut size={15}/> Log out</button></div></header>
+    <main className="stakeholder-portal">
+      <section className="panel tenant-profile-card"><div><span className="eyebrow">{roleLabel.toUpperCase()} PORTAL</span><h1>Welcome, {tenant?.full_name || auth.user_metadata?.full_name || 'Tenant'}</h1><p>Your property information, messages, complaints and tenancy documents are here.</p></div>{isTenant && <div className="welcome-actions"><button className="primary-button" onClick={() => setNewComplaint(true)}><Plus size={16}/> Lodge a complaint</button><button className="secondary-button" onClick={onDownloadDocuments} disabled={tenantDocsBusy}><Download size={15}/>{tenantDocsBusy ? 'Preparing PDFs…' : 'Download tenancy PDFs'}</button></div>}</section>
+      {isTenant && <>
+        <div className="tenant-profile-grid">
+          <section className="panel tenant-profile-section"><span className="eyebrow">YOUR TENANCY PROFILE</span><h2>{tenant?.full_name || auth.user_metadata?.full_name || 'Tenant profile'}</h2><p>{tenant?.email || auth.email}</p><p>{tenant?.phone || 'Phone number not on file'}</p><p>{tenant?.permanent_address || 'Permanent address not on file'}</p><div className="tenant-profile-facts"><span>Lease start <b>{dateLabel(tenant?.lease_start)}</b></span><span>Lease end <b>{dateLabel(tenant?.lease_end)}</b></span><span>Status <b>{tenant?.status || 'Profile not linked'}</b></span></div></section>
+          <section className="panel tenant-profile-section"><span className="eyebrow">YOUR PROPERTY</span><h2>{property?.name || 'Property not assigned'}</h2><p>{property ? [property.address, property.city, property.state, property.country].filter(Boolean).join(', ') : 'Your landlord can assign a property to your tenancy profile.'}</p>{tenant?.rent_amount != null && <p>Rent: <b>{currency(tenant.rent_amount)}</b></p>}<div className="tenant-profile-facts">{contacts.map((contact) => <span key={contact.id}>{contact.role === 'caretaker' ? 'Caretaker' : 'Agent'} <b>{contact.full_name}</b></span>)}</div></section>
+        </div>
+        {!tenant && <div className="panel tenant-profile-section" role="status"><span className="eyebrow">TENANCY LINK</span><h2>Your sign-in is active</h2><p>We could not find a tenancy record linked to <b>{auth.email}</b>. Ask your landlord to check that this is the email on your tenant record and resend your invitation if needed.</p></div>}
+        {tenant && <TenantOperations auth={auth} tenant={tenant} properties={properties}/>}
+      </>}
+      <ComplaintInbox records={cases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={messages} onSend={onSend} onResolution={onResolution} currentUserId={auth.id} onNew={() => setNewComplaint(true)}/>
+      {!isTenant && <section className="panel tenant-profile-section"><span className="eyebrow">YOUR ACCOUNT</span><h2>Property community profile</h2><p>{auth.user_metadata?.full_name || auth.email}</p><p>Use the complaint room to follow cases connected to this account.</p></section>}
+      {toast && <div className="toast"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={onClearToast}><X size={15}/></button></div>}
+    </main>
+  </div>;
 }
 
 function Metric({ icon: Icon, label, value, note, color }) {
