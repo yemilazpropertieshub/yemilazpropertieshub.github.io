@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import {
-  ArrowLeft, ArrowRight, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
+  ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
   CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut, UserRound,
   Menu, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Trash2, Users, Wallet, X, MapPin, Heart, Bell, Wrench, Download, PenLine,
@@ -40,6 +40,39 @@ function BrandWatermark({ logo = 'horizon' }) {
   return <div className="brand-watermark" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <BrandSymbol key={index} logo={logo}/>)}</div>;
 }
 
+function ScrollNavigation() {
+  const [position, setPosition] = useState({ top: 0, bottom: false });
+  useEffect(() => {
+    const update = () => setPosition({ top: window.scrollY, bottom: window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24 });
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    const observer = new ResizeObserver(update);
+    observer.observe(document.body);
+    return () => { window.removeEventListener('scroll', update); window.removeEventListener('resize', update); observer.disconnect(); };
+  }, []);
+  return <div className="scroll-navigation" aria-label="Page navigation">
+    {position.top > 180 && <button type="button" aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18}/><span>Top</span></button>}
+    {!position.bottom && <button type="button" aria-label="Go to bottom" title="Go to bottom" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}><ArrowDown size={18}/><span>Bottom</span></button>}
+  </div>;
+}
+
+function AuthLoadingScreen({ onContinue }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const timer = window.setTimeout(() => setSlow(true), 3500); return () => window.clearTimeout(timer); }, []);
+  return <main className="auth-loading-screen" aria-live="polite">
+    <div className="auth-loading-card">
+      <div className="auth-loading-logo"><BrandSymbol logo="horizon"/></div>
+      <span className="eyebrow">YEMILAZ PROPERTIES</span>
+      <h1>{slow ? 'Still connecting securely' : 'Preparing your workspace'}</h1>
+      <p>{slow ? 'The connection is taking longer than usual. You can continue and try signing in again when the network is ready.' : 'We’re checking your secure sign-in and getting your property workspace ready.'}</p>
+      <div className="auth-loading-track" role="progressbar" aria-label="Connecting"><span/></div>
+      <small>{slow ? 'Please check your internet connection.' : 'This usually takes just a moment.'}</small>
+      {slow && <button type="button" className="primary-button" onClick={onContinue}>Continue to sign in <ArrowRight size={16}/></button>}
+    </div>
+  </main>;
+}
+
 function BrandingFields({ profile, defaultBusinessName = 'Yemilaz Properties' }) {
   const [name, setName] = useState(profile?.business_name ?? defaultBusinessName);
   const [template, setTemplate] = useState(profile?.brand_template || 'jade');
@@ -75,6 +108,7 @@ function App() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All properties');
   const [auth, setAuth] = useState(null);
+  const [authChecking, setAuthChecking] = useState(Boolean(supabase));
   const [accountRole, setAccountRole] = useState('landlord');
   const [stakeholderCases, setStakeholderCases] = useState([]);
   const [tenantAccount, setTenantAccount] = useState(null);
@@ -106,6 +140,7 @@ function App() {
   useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
+    const sessionFailsafe = window.setTimeout(() => { if (active) setAuthChecking(false); }, 8000);
     const currentUrl = new URL(window.location.href);
     const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
     const authError = hashParams.get('error_code') || hashParams.get('error');
@@ -138,7 +173,7 @@ function App() {
         const { data: profile } = await supabase.from('stakeholder_profiles').select('user_id,role,staff_id').eq('user_id', user.id).maybeSingle();
         if (active) setAccountRole(profile?.role || 'landlord');
       }
-    });
+    }).finally(() => { if (active) { window.clearTimeout(sessionFailsafe); setAuthChecking(false); } });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setAuth(session?.user || null);
       if (session?.user) {
@@ -154,7 +189,7 @@ function App() {
       }
       if (event === 'PASSWORD_RECOVERY') setAuthNotice({ kind: 'reset', message: 'Choose a new password for your Yemilaz Properties account.' });
     });
-    return () => { active = false; subscription.unsubscribe(); };
+    return () => { active = false; window.clearTimeout(sessionFailsafe); subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -859,10 +894,11 @@ function App() {
   }
 
   const portal = new URLSearchParams(window.location.search).get('portal');
+  if (authChecking && (portal === 'account' || portal === 'admin')) return <AuthLoadingScreen onContinue={() => setAuthChecking(false)}/>;
   if(mfaChallenge)return <MfaVerificationGate onVerify={async code=>{const {error}=await supabase.auth.mfa.verify({...mfaChallenge,code});if(error)return error.message;setMfaChallenge(null);return '';}} onSignOut={()=>supabase.auth.signOut()}/>;
   if (portal === 'admin' && auth && (!adminChecked || !isPlatformAdmin)) return <AdminAccessScreen checking={!adminChecked} onSignOut={() => supabase.auth.signOut()}/>;
 
-  if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/>
+  if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/><ScrollNavigation/>
     {portal === 'admin' || portal === 'account'
       ? <LoginPortal audience={portal} onSubmit={(event) => login(event, portal === 'admin')} onForgotPassword={requestPasswordReset} signing={signing} onRegister={(role) => { setAuthRegistrationRole(role); setAuthModal(true); }} onAdminSignIn={() => window.location.assign(`${window.location.pathname}?portal=admin`)} toast={toast} onClearToast={() => setToast('')}/>
       : showComplaintRoom ? <PublicComplaintRoom properties={dashboardAds} onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={publicListings} onSignIn={() => { window.location.assign(`${window.location.pathname}?portal=account`); }} onAdminSignIn={() => { window.location.assign(`${window.location.pathname}?portal=admin`); }} onComplaint={() => setShowComplaintRoom(true)}/>}
@@ -871,11 +907,12 @@ function App() {
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
 
-  if (['agent', 'caretaker', 'lawyer'].includes(accountRole)) return <StaffPortal auth={auth} role={accountRole} staff={staffAccount} tenants={staffAssignments} properties={propertyRecords} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')}/>;
-  if (['stakeholder', 'tenant'].includes(accountRole)) return <StakeholderPortal auth={auth} role={accountRole} tenant={tenantAccount} contacts={tenantContacts} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} properties={propertyRecords} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} onDownloadDocuments={downloadTenantPortalDocuments} tenantDocsBusy={tenantDocsBusy}/>;
+  if (['agent', 'caretaker', 'lawyer'].includes(accountRole)) return <><StaffPortal auth={auth} role={accountRole} staff={staffAccount} tenants={staffAssignments} properties={propertyRecords} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')}/><ScrollNavigation/></>;
+  if (['stakeholder', 'tenant'].includes(accountRole)) return <><StakeholderPortal auth={auth} role={accountRole} tenant={tenantAccount} contacts={tenantContacts} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} properties={propertyRecords} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} onDownloadDocuments={downloadTenantPortalDocuments} tenantDocsBusy={tenantDocsBusy}/><ScrollNavigation/></>;
 
   return <>
     <div className={`app-shell theme-${landlordProfile?.brand_template || 'jade'}`}>
+      <ScrollNavigation/>
       <BrandWatermark logo={landlordProfile?.brand_logo || 'horizon'}/>
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
         <div className="brand"><BrandLockup name={landlordProfile?.business_name || 'Yemilaz Properties'} logo={landlordProfile?.brand_logo || 'horizon'} className="workspace-brand"/><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
