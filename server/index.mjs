@@ -26,6 +26,7 @@ app.use((req, res, next) => {
 function configReady(action) { return supabaseUrl && supabaseAnonKey && (action === 'download' || (resendApiKey && sender)); }
 
 function safeName(value) { return String(value || 'record').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60); }
+function safeFileName(value) { return String(value || 'document.pdf').replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 100); }
 
 function crc32(buffer) {
   let crc = 0xffffffff;
@@ -98,6 +99,49 @@ async function recordDelivery(delivery, ownerId, tenantId, accessToken) {
   } catch (error) {
     console.error('Could not save delivery record:', error.message);
   }
+}
+
+async function saveParticipantDocuments({ files, recipients, ownerId, tenantId, propertyId, accessToken }) {
+  const saved = [];
+  const recipientEmails = [...new Set(recipients.map((recipient) => recipient.email?.trim().toLowerCase()).filter(Boolean))];
+  const entries = [
+    ...files.map((file) => ({
+      ...file,
+      emails: (file.emails || (file.recipientEmail ? [file.recipientEmail] : recipientEmails))
+        .map((email) => email.trim().toLowerCase()),
+      category: file.category || 'individual_packet',
+    })),
+  ];
+  for (const file of entries) {
+    const path = `${ownerId}/${tenantId}/${crypto.randomUUID()}/${safeFileName(file.name.split('/').at(-1))}`;
+    try {
+      const upload = await fetch(`${supabaseUrl}/storage/v1/object/property-documents/${path}`, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/pdf',
+          'x-upsert': 'false',
+        },
+        body: file.data,
+      });
+      if (!upload.ok) throw new Error(`Storage upload failed (${upload.status}): ${(await upload.text()).slice(0, 220)}`);
+      await supabaseRequest('property_documents', accessToken, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          owner_id: ownerId, tenant_id: tenantId, property_id: propertyId || null,
+          uploaded_by: ownerId, title: file.title || file.name.split('/').at(-1).replace(/\.pdf$/i, '').replaceAll('-', ' '),
+          storage_path: path, mime_type: 'application/pdf',
+          recipient_emails: file.emails || recipientEmails, document_category: file.category || 'tenancy_document',
+        }),
+      });
+      saved.push(file.name);
+    } catch (error) {
+      console.error(`Could not save participant PDF ${file.name}:`, error.message);
+    }
+  }
+  return saved.length;
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true, downloadConfigured: Boolean(configReady('download')), emailConfigured: Boolean(configReady('email')) }));
@@ -208,7 +252,19 @@ app.post('/api/tenant-packets', async (req, res) => {
       await recordDelivery(delivery, user.id, tenant.id, accessToken);
       deliveries.push(delivery);
     }
-    res.json({ deliveries });
+    const dashboardDocumentCount = await saveParticipantDocuments({
+      files: [
+        ...sharedDocuments.map((document) => ({ ...document, category: 'tenancy_document' })),
+        ...receiptFiles.map((file) => ({ ...file, category: 'payment_receipt' })),
+        ...files.map((file) => {
+          const role = file.name.match(/-([a-zA-Z0-9_-]+)\.pdf$/)?.[1];
+          const recipient = recipients.find((item) => safeName(item.role) === role);
+          return { ...file, recipientEmail: recipient?.email, title: `${tenant.full_name} ${recipient?.role || 'participant'} tenancy summary`, category: 'individual_packet' };
+        }),
+      ],
+      recipients, ownerId: user.id, tenantId: tenant.id, propertyId: property?.id, accessToken,
+    });
+    res.json({ deliveries, dashboardDocumentCount });
   } catch (error) {
     console.error('Tenant packet delivery failed:', error);
     res.status(500).json({ error: 'Yemilaz Properties could not prepare this document packet. Please try again later or contact your property administrator.' });
