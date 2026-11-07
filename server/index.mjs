@@ -164,8 +164,11 @@ app.post('/api/tenant-packets', async (req, res) => {
         method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ contact_email: user.email }),
       });
     }
+    // Let tenant row-level security verify the signed-in email. Filtering by
+    // `email=eq...` here was case-sensitive and could reject a valid linked
+    // tenant when the saved address used different capitalization.
     const tenantRows = await supabaseRequest(action === 'tenant-download'
-      ? `tenants?id=eq.${tenantId}&email=eq.${encodeURIComponent(user.email)}&select=*`
+      ? `tenants?id=eq.${tenantId}&select=*`
       : `tenants?id=eq.${tenantId}&owner_id=eq.${user.id}&select=*`, accessToken);
     const tenant = tenantRows?.[0];
     const ownerId = tenant?.owner_id;
