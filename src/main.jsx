@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import {
-  ArrowRight, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
+  ArrowLeft, ArrowRight, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
   CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut, UserRound,
   Menu, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Trash2, Users, Wallet, X, MapPin, Heart, Bell, Wrench, Download, PenLine,
