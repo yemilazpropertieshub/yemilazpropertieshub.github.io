@@ -15,6 +15,7 @@ A responsive property marketing and management website built with Node.js, React
 - Record later rent, deposit, and service-charge payments in **Payments & charges**.
 - Delete a property from **Properties**. Its tenant and payment history are retained, with the tenant allocation cleared.
 - Tenants have their own sign-in profile, document downloads, complaint conversation, document-signature history, and maintenance request form.
+- Tenant workspaces include recorded rent/charge history, landlord notices, lease and inspection dates, maintenance evidence and two-way updates, searchable document categories, and landlord-reviewed profile correction requests.
 - The landlord workspace includes rent schedules, manual email reminders, maintenance tracking with caretaker/agent assignment, a viewing calendar, activity notifications, payment evidence, and CSV portfolio reports.
 - Platform administrators can inspect registered contact information and suspend/reactivate linked accounts from **Administration → People directory**. The app checks account status at sign-in and periodically during a session after the account-status migration is applied.
 - Public visitors can save homes and searches in their browser. The existing map browser uses the filtered locations; property records can include latitude/longitude for a more precise map result.
@@ -58,6 +59,7 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 20. [`supabase/migrations/20261119_property_message_notifications.sql`](supabase/migrations/20261119_property_message_notifications.sql)
 21. [`supabase/migrations/20261120_universal_property_categories.sql`](supabase/migrations/20261120_universal_property_categories.sql)
 22. [`supabase/migrations/20261121_property_rules_and_shared_document_library.sql`](supabase/migrations/20261121_property_rules_and_shared_document_library.sql)
+23. [`supabase/migrations/20261123_tenant_portal_daily_tools.sql`](supabase/migrations/20261123_tenant_portal_daily_tools.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -80,6 +82,8 @@ Migration 20 creates in-app notifications when a property message or complaint r
 Migration 21 adds property size, suitable-use, and rental price-period fields, and expands wanted-request categories to include residential, commercial, land, farm, and other property types. Run it in Supabase SQL Editor before deploying the updated frontend. Existing listings keep their current values and remain compatible.
 
 Migration 22 updates the generated rule document to **Property rules**, replaces the exact old residential-only default with inclusive wording for different property types while preserving custom landlord text, and enables each emailed participant to access only the PDF copies addressed to their registered email from their account. Landlords retain access to their full document records. It also repairs tenant access to the linked landlord profile and uses non-recursive security-definer checks for document and private-file access. Apply it in Supabase SQL Editor before deploying the updated document service and frontend. Previously emailed PDFs are not retroactively added to account libraries; resend the packet to save a fresh copy for each recipient.
+
+Migration 23 enables landlord notices with tenant notifications, landlord-reviewed tenant profile corrections, private maintenance photo evidence, tenant-visible maintenance timelines and replies, and tenant access to assigned upcoming inspections. The tenant portal also displays the existing rent ledger; it does not collect online payments. Apply this migration in Supabase SQL Editor before deploying the updated frontend. The landlord workspace adds **Property notices** and **Tenant profile requests** under Operations & governance.
 
 The sixth migration makes landlord account creation invitation-only. Each code is single-use, expires after a chosen period (1 hour to 7 days), and can be revoked. The code manager appears only to a platform administrator. After applying the migration, bootstrap the first administrator in SQL Editor by replacing `OWNER_EMAIL_HERE` with the email on the Yemilaz Properties owner account:
 
