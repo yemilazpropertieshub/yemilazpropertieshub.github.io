@@ -164,7 +164,7 @@ export function createTenantDocumentSet({ tenant, landlord, property, guarantor,
       { type: 'section', title: 'Term and financial terms' },
       { type: 'table', headers: ['Lease start', 'Lease end', 'Rent / frequency', 'Deposit agreed'], widths: [120, 120, 145, 143], rows: [[date(tenant.lease_start), date(tenant.lease_end), `${money(tenant.rent_amount)} / ${tenant.rent_frequency || 'period'}`, money(tenant.deposit_amount)]] },
       { type: 'section', title: 'Additional agreement terms' },
-      ...wrap(landlord.agreement_terms || 'No additional agreement terms are recorded.', 96).map((text) => ({ type: 'paragraph', text })),
+      ...wrap(landlord.agreement_terms || 'Payment obligations, deposits, permitted use, repairs, access, renewal, notices and handover must be completed in the signed agreement and follow applicable law. This is a general draft for local legal review; it does not authorize eviction, lockout, utility disconnection or seizure of belongings without legally required process.', 96).map((text) => ({ type: 'paragraph', text })),
       { type: 'section', title: 'Execution' }, { type: 'signatures' },
     ]) },
     { name: '03-Property-Rules.pdf', data: details(brand, 'PROPERTY RULES', 'Practical standards for the responsible use and care of the premises', tenantName, [
