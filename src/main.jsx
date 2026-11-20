@@ -173,6 +173,7 @@ function App() {
   const [toast, setToast] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmReason, setConfirmReason] = useState('');
+  const [confirmError, setConfirmError] = useState('');
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [showComplaintRoom, setShowComplaintRoom] = useState(false);
   const [activeComplaint, setActiveComplaint] = useState(null);
@@ -950,45 +951,53 @@ function App() {
   }
 
   async function voidTransaction(record, confirmed = false, reason = '') {
-    if (!auth || !supabase || record.status === 'voided') { setToast('This transaction could not be voided. Refresh the ledger and try again.'); return false; }
+    if (!auth || !supabase || record.status === 'voided') { setConfirmError('This transaction is unavailable or already voided. Refresh the ledger and try again.'); return false; }
     if (!confirmed) {
       setToast('');
+      setConfirmError('');
       setConfirmReason('');
       setConfirmDialog({ title: 'Void this transaction?', message: `${currency(record.amount)} · ${record.description}`, detail: 'This transaction will remain in the ledger and be excluded from payment totals. Add a reason for the audit history.', confirmLabel: 'Void transaction', variant: 'warning', requireReason: true, onConfirm: (reasonText) => voidTransaction(record, true, reasonText) });
       return;
     }
-    if (!reason.trim()) { setToast('Enter a reason to void this transaction.'); return; }
+    if (!reason.trim()) { setConfirmError('Enter a reason before voiding this transaction.'); return false; }
     setTransactionActionId(record.id);
     let data, error;
     try { ({ data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single()); }
-    catch (requestError) { setToast(`Could not void this transaction: ${requestError.message || 'Connection error. Please try again.'}`); return false; }
+    catch (requestError) { const message = `Could not void this transaction: ${requestError.message || 'Connection error. Please try again.'}`; setConfirmError(message); setToast(message); return false; }
     finally { setTransactionActionId(null); }
-    if (error) { setToast(`Could not void this transaction: ${error.message}`); return false; }
+    if (error) { const message = `Could not void this transaction: ${error.message}`; setConfirmError(message); setToast(message); return false; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
     setToast('Transaction voided. Its history has been kept.');
+    setConfirmError('');
     return true;
   }
 
   async function setTransactionPaid(record, status, confirmed = false) {
-    if (!auth || !supabase || !['paid', 'unpaid'].includes(status) || record.status === 'voided') return;
+    if (!auth || !supabase || !['paid', 'unpaid'].includes(status) || record.status === 'voided') { setConfirmError('This transaction is unavailable or already voided. Refresh the ledger and try again.'); return false; }
     if (status === 'unpaid' && record.status === 'paid' && !confirmed) {
       setToast('');
+      setConfirmError('');
       setConfirmReason('');
       setConfirmDialog({ title: 'Mark this payment as unpaid?', message: record.description, detail: 'The recorded payment date will be cleared and this charge will count as outstanding again.', confirmLabel: 'Mark as unpaid', variant: 'warning', onConfirm: () => setTransactionPaid(record, status, true) });
       return;
     }
     setTransactionActionId(record.id);
-    const { data, error } = await supabase.from('service_charges').update({ status, paid_at: status === 'paid' ? localDateISO() : null, edited_at: new Date().toISOString(), edited_by: auth.id }).eq('owner_id', auth.id).eq('id', record.id).select().single();
-    setTransactionActionId(null);
-    if (error) { setToast(error.message); return; }
+    let data, error;
+    try { ({ data, error } = await supabase.from('service_charges').update({ status, paid_at: status === 'paid' ? localDateISO() : null, edited_at: new Date().toISOString(), edited_by: auth.id }).eq('owner_id', auth.id).eq('id', record.id).select().single()); }
+    catch (requestError) { const message = `Could not update this payment: ${requestError.message || 'Connection error. Please try again.'}`; setConfirmError(message); setToast(message); return false; }
+    finally { setTransactionActionId(null); }
+    if (error) { const message = `Could not update this payment: ${error.message}`; setConfirmError(message); setToast(message); return false; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
     setToast(status === 'paid' ? 'Payment recorded as paid.' : 'Payment marked unpaid.');
+    setConfirmError('');
+    return true;
   }
 
   async function deleteUnpaidTransaction(record, confirmed = false) {
-    if (!auth || !supabase || record.status !== 'unpaid') { setToast('Only unpaid charges can be deleted. Refresh the ledger and try again.'); return false; }
+    if (!auth || !supabase || record.status !== 'unpaid') { setConfirmError('Only unpaid charges can be deleted. Refresh the ledger and try again.'); return false; }
     if (!confirmed) {
       setToast('');
+      setConfirmError('');
       setConfirmReason('');
       setConfirmDialog({ title: 'Delete this unpaid charge?', message: `${record.description} · ${currency(record.amount)}`, detail: 'This charge will be permanently removed from the ledger. Paid and voided transaction history is not affected.', confirmLabel: 'Delete charge', variant: 'danger', onConfirm: () => deleteUnpaidTransaction(record, true) });
       return;
@@ -996,13 +1005,14 @@ function App() {
     setTransactionActionId(record.id);
     let data, error;
     try { ({ data, error } = await supabase.from('service_charges').delete().eq('owner_id', auth.id).eq('id', record.id).eq('status', 'unpaid').select('id').maybeSingle()); }
-    catch (requestError) { setToast(`Could not delete this charge: ${requestError.message || 'Connection error. Please try again.'}`); return false; }
+    catch (requestError) { const message = `Could not delete this charge: ${requestError.message || 'Connection error. Please try again.'}`; setConfirmError(message); setToast(message); return false; }
     finally { setTransactionActionId(null); }
-    if (error) { setToast(`Could not delete this charge: ${error.message}`); return false; }
-    if (!data) { setToast('This charge was not deleted. It may have changed or you may not have permission. Refresh the ledger and try again.'); return false; }
+    if (error) { const message = `Could not delete this charge: ${error.message}`; setConfirmError(message); setToast(message); return false; }
+    if (!data) { const message = 'No ledger row was deleted. It may have changed or the account may not have delete access. Refresh the ledger and try again.'; setConfirmError(message); setToast(message); return false; }
     setPaymentRecords((current) => current.filter((item) => item.id !== record.id));
     setRecords((current) => current.filter((item) => item.id !== record.id));
     setToast('Unpaid charge deleted. Paid and voided history remains protected.');
+    setConfirmError('');
     return true;
   }
 
@@ -1037,13 +1047,12 @@ function App() {
     if (!confirmDialog || confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())) return;
     setConfirmBusy(true);
     try {
-      await confirmDialog.onConfirm(confirmReason);
+      const succeeded = await confirmDialog.onConfirm(confirmReason);
+      if (succeeded === false) return;
       setConfirmDialog(null);
       setConfirmReason('');
     } catch (error) {
-      setToast(`The action could not be completed: ${error?.message || 'Please try again.'}`);
-      setConfirmDialog(null);
-      setConfirmReason('');
+      setConfirmError(`The action could not be completed: ${error?.message || 'Please try again.'}`);
     } finally {
       setConfirmBusy(false);
     }
@@ -1060,7 +1069,7 @@ function App() {
       ? <LoginPortal audience={portal} onSubmit={(event) => login(event, portal === 'admin')} onForgotPassword={requestPasswordReset} signing={signing} onRegister={(role) => { setAuthRegistrationRole(role); setAuthModal(true); }} onAdminSignIn={() => window.location.assign(`${window.location.pathname}?portal=admin`)}/>
       : showComplaintRoom ? <PublicComplaintRoom properties={dashboardAds} onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={publicListings} onSignIn={() => { window.location.assign(`${window.location.pathname}?portal=account`); }} onAdminSignIn={() => { window.location.assign(`${window.location.pathname}?portal=admin`); }} onComplaint={() => setShowComplaintRoom(true)}/>}
     {authModal && <AuthDialog initialRole={authRegistrationRole} onSubmit={login} onSignUp={registerLandlord} onForgotPassword={requestPasswordReset} onClose={() => setAuthModal(false)} signing={signing}/>}
-    {confirmDialog && <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !confirmBusy && (setConfirmDialog(null), setConfirmReason(''))}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"><div className={`confirm-icon ${confirmDialog.variant || 'danger'}`}><AlertTriangle size={22}/></div><span className="eyebrow">{confirmDialog.variant === 'warning' ? 'REVIEW THIS CHANGE' : 'CONFIRM ACTION'}</span><h2 id="confirm-dialog-title">{confirmDialog.title}</h2><p id="confirm-dialog-message" className="confirm-message">{confirmDialog.message}</p><p className="confirm-detail">{confirmDialog.detail}</p>{confirmDialog.requireReason && <label className="confirm-reason">Reason for voiding<textarea autoFocus rows={3} value={confirmReason} onChange={(event) => setConfirmReason(event.target.value)} maxLength={500} placeholder="Add a short reason for the transaction history"/></label>}<div className="confirm-actions"><button type="button" className="secondary-button" disabled={confirmBusy} onClick={() => { setConfirmDialog(null); setConfirmReason(''); }}>Cancel</button><button type="button" className={`confirm-submit ${confirmDialog.variant || 'danger'}`} disabled={confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())} onClick={runConfirmedAction}>{confirmBusy ? 'Please wait…' : confirmDialog.confirmLabel || 'Confirm'}</button></div></section></div>}
+    {confirmDialog && <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !confirmBusy && (setConfirmDialog(null), setConfirmReason(''), setConfirmError(''))}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"><div className={`confirm-icon ${confirmDialog.variant || 'danger'}`}><AlertTriangle size={22}/></div><span className="eyebrow">{confirmDialog.variant === 'warning' ? 'REVIEW THIS CHANGE' : 'CONFIRM ACTION'}</span><h2 id="confirm-dialog-title">{confirmDialog.title}</h2><p id="confirm-dialog-message" className="confirm-message">{confirmDialog.message}</p><p className="confirm-detail">{confirmDialog.detail}</p>{confirmError && <p className="confirm-error" role="alert">{confirmError}</p>}{confirmDialog.requireReason && <label className="confirm-reason">Reason for voiding<textarea autoFocus rows={3} value={confirmReason} onChange={(event) => { setConfirmReason(event.target.value); setConfirmError(''); }} maxLength={500} placeholder="Add a short reason for the transaction history"/></label>}<div className="confirm-actions"><button type="button" className="secondary-button" disabled={confirmBusy} onClick={() => { setConfirmDialog(null); setConfirmReason(''); setConfirmError(''); }}>Cancel</button><button type="button" className={`confirm-submit ${confirmDialog.variant || 'danger'}`} disabled={confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())} onClick={runConfirmedAction}>{confirmBusy ? 'Please wait…' : confirmDialog.confirmLabel || 'Confirm'}</button></div></section></div>}
     {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
@@ -1160,6 +1169,7 @@ function App() {
 
     {allocationTenant && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setAllocationTenant(null)}><form className="modal" onSubmit={allocateProperty}><div className="modal-heading"><div><span className="eyebrow">PROPERTY ALLOCATION</span><h2>{allocationTenant.property_id ? 'Change tenant property' : 'Allocate a property'}</h2><p>{allocationTenant.full_name} · allocation is available after a rent or deposit payment is recorded.</p></div><button type="button" className="icon-button" onClick={() => setAllocationTenant(null)}><X size={19}/></button></div><label>Available property<select required name="property_id" defaultValue=""><option value="">Select a property</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select></label>{!paidForTenant(allocationTenant.id) && <p className="setup-note">Record a paid rent or deposit under Payments & charges before allocating a property.</p>}<div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setAllocationTenant(null)}>Cancel</button><button className="primary-button" disabled={saving || !paidForTenant(allocationTenant.id)}>Allocate property</button></div></form></div>}
 
+    {confirmDialog && <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !confirmBusy && (setConfirmDialog(null), setConfirmReason(''), setConfirmError(''))}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"><div className={`confirm-icon ${confirmDialog.variant || 'danger'}`}><AlertTriangle size={22}/></div><span className="eyebrow">{confirmDialog.variant === 'warning' ? 'REVIEW THIS CHANGE' : 'CONFIRM ACTION'}</span><h2 id="confirm-dialog-title">{confirmDialog.title}</h2><p id="confirm-dialog-message" className="confirm-message">{confirmDialog.message}</p><p className="confirm-detail">{confirmDialog.detail}</p>{confirmError && <p className="confirm-error" role="alert">{confirmError}</p>}{confirmDialog.requireReason && <label className="confirm-reason">Reason for voiding<textarea autoFocus rows={3} value={confirmReason} onChange={(event) => { setConfirmReason(event.target.value); setConfirmError(''); }} maxLength={500} placeholder="Add a short reason for the transaction history"/></label>}<div className="confirm-actions"><button type="button" className="secondary-button" disabled={confirmBusy} onClick={() => { setConfirmDialog(null); setConfirmReason(''); setConfirmError(''); }}>Cancel</button><button type="button" className={`confirm-submit ${confirmDialog.variant || 'danger'}`} disabled={confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())} onClick={runConfirmedAction}>{confirmBusy ? 'Please wait…' : confirmDialog.confirmLabel || 'Confirm'}</button></div></section></div>}
     {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </>;
