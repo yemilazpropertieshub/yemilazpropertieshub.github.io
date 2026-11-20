@@ -5,7 +5,7 @@ import {
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
   CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut, MessageCircle, UserRound,
   Menu, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
-  Trash2, Users, Wallet, X, MapPin, Heart, Bell, Wrench, Download, PenLine,
+  Trash2, Users, Wallet, X, MapPin, Heart, Bell, Wrench, Download, PenLine, AlertTriangle,
 } from 'lucide-react';
 import './style.css';
 
@@ -170,6 +170,9 @@ function App() {
   const [sendingTenant, setSendingTenant] = useState(null);
   const [downloadingTenant, setDownloadingTenant] = useState(null);
   const [toast, setToast] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [confirmReason, setConfirmReason] = useState('');
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [showComplaintRoom, setShowComplaintRoom] = useState(false);
   const [activeComplaint, setActiveComplaint] = useState(null);
   const [complaintMessages, setComplaintMessages] = useState([]);
@@ -808,8 +811,13 @@ function App() {
     } else setToast(page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties account.');
   }
 
-  async function deleteProperty(property) {
-    if (!window.confirm(`Delete “${property.name}”? Linked tenants and payment history will be kept, but the property allocation will be cleared.`)) return;
+  async function deleteProperty(property, confirmed = false) {
+    if (!confirmed) {
+      setToast('');
+      setConfirmReason('');
+      setConfirmDialog({ title: 'Delete this property?', message: `Delete “${property.name}”?`, detail: 'Linked tenant and payment records will be kept, but their property allocation will be cleared.', confirmLabel: 'Delete property', variant: 'danger', onConfirm: () => deleteProperty(property, true) });
+      return;
+    }
     if (!auth || !supabase) { setToast('Sign in before deleting properties.'); return; }
     // Clear foreign-key references first so existing projects keep payment history when a property is removed.
     const { error: tenantError } = await supabase.from('tenants').update({ property_id: null }).eq('owner_id', auth.id).eq('property_id', property.id);
@@ -940,30 +948,43 @@ function App() {
     setEditingPerson(null); setToast('Contact details updated.');
   }
 
-  async function voidTransaction(record) {
+  async function voidTransaction(record, confirmed = false, reason = '') {
     if (!auth || !supabase || record.status === 'voided') return;
-    const reason = window.prompt(`Why are you voiding “${record.description}”? This reason is kept in the transaction history.`);
-    if (reason === null) return;
+    if (!confirmed) {
+      setToast('');
+      setConfirmReason('');
+      setConfirmDialog({ title: 'Void this transaction?', message: `${currency(record.amount)} · ${record.description}`, detail: 'This transaction will remain in the ledger and be excluded from payment totals. Add a reason for the audit history.', confirmLabel: 'Void transaction', variant: 'warning', requireReason: true, onConfirm: (reasonText) => voidTransaction(record, true, reasonText) });
+      return;
+    }
     if (!reason.trim()) { setToast('Enter a reason to void this transaction.'); return; }
-    if (!window.confirm(`Void this transaction for ${currency(record.amount)}? It stays in your records and is excluded from payment totals.`)) return;
     const { data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single();
     if (error) { setToast(error.message); return; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
     setToast('Transaction voided. Its history has been kept.');
   }
 
-  async function setTransactionPaid(record, status) {
+  async function setTransactionPaid(record, status, confirmed = false) {
     if (!auth || !supabase || !['paid', 'unpaid'].includes(status) || record.status === 'voided') return;
-    if (status === 'unpaid' && record.status === 'paid' && !window.confirm(`Mark “${record.description}” as unpaid? Its payment date will be cleared.`)) return;
+    if (status === 'unpaid' && record.status === 'paid' && !confirmed) {
+      setToast('');
+      setConfirmReason('');
+      setConfirmDialog({ title: 'Mark this payment as unpaid?', message: record.description, detail: 'The recorded payment date will be cleared and this charge will count as outstanding again.', confirmLabel: 'Mark as unpaid', variant: 'warning', onConfirm: () => setTransactionPaid(record, status, true) });
+      return;
+    }
     const { data, error } = await supabase.from('service_charges').update({ status, paid_at: status === 'paid' ? new Date().toISOString().slice(0, 10) : null, edited_at: new Date().toISOString(), edited_by: auth.id }).eq('owner_id', auth.id).eq('id', record.id).select().single();
     if (error) { setToast(error.message); return; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
     setToast(status === 'paid' ? 'Payment recorded as paid.' : 'Payment marked unpaid.');
   }
 
-  async function deleteUnpaidTransaction(record) {
+  async function deleteUnpaidTransaction(record, confirmed = false) {
     if (!auth || !supabase || record.status !== 'unpaid') return;
-    if (!window.confirm(`Delete the unpaid charge “${record.description}” for ${currency(record.amount)}? This removes it from the ledger.`)) return;
+    if (!confirmed) {
+      setToast('');
+      setConfirmReason('');
+      setConfirmDialog({ title: 'Delete this unpaid charge?', message: `${record.description} · ${currency(record.amount)}`, detail: 'This charge will be permanently removed from the ledger. Paid and voided transaction history is not affected.', confirmLabel: 'Delete charge', variant: 'danger', onConfirm: () => deleteUnpaidTransaction(record, true) });
+      return;
+    }
     const { error } = await supabase.from('service_charges').delete().eq('owner_id', auth.id).eq('id', record.id).eq('status', 'unpaid');
     if (error) { setToast(error.message); return; }
     setPaymentRecords((current) => current.filter((item) => item.id !== record.id));
@@ -971,11 +992,16 @@ function App() {
     setToast('Unpaid charge deleted. Paid and voided history remains protected.');
   }
 
-  async function deletePerson(record, kind) {
+  async function deletePerson(record, kind, confirmed = false) {
     const names = { tenant: 'tenant', guarantor: 'guarantor', staff: record.role === 'caretaker' ? 'caretaker' : record.role === 'lawyer' ? 'lawyer' : 'agent' };
     const label = names[kind];
     const warning = kind === 'tenant' ? ' This also removes linked payment and guarantor records.' : kind === 'staff' ? ' Tenant records will remain, but this person will be unassigned.' : '';
-    if (!window.confirm(`Delete ${label} “${record.full_name}”?${warning}`)) return;
+    if (!confirmed) {
+      setToast('');
+      setConfirmReason('');
+      setConfirmDialog({ title: `Delete this ${label}?`, message: record.full_name, detail: warning.trim() || 'This person will be removed from your records.', confirmLabel: `Delete ${label}`, variant: 'danger', onConfirm: () => deletePerson(record, kind, true) });
+      return;
+    }
     if (!auth || !supabase) return;
     const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
     const { error } = await supabase.from(table).delete().eq('owner_id', auth.id).eq('id', record.id);
@@ -993,6 +1019,18 @@ function App() {
     setToast(`${label[0].toUpperCase()}${label.slice(1)} deleted.`);
   }
 
+  async function runConfirmedAction() {
+    if (!confirmDialog || confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())) return;
+    setConfirmBusy(true);
+    try {
+      await confirmDialog.onConfirm(confirmReason);
+      setConfirmDialog(null);
+      setConfirmReason('');
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
+
   const portal = new URLSearchParams(window.location.search).get('portal');
   if (authChecking && (portal === 'account' || portal === 'admin' || portal === 'review')) return <AuthLoadingScreen onContinue={() => setAuthChecking(false)}/>;
   if(mfaChallenge)return <MfaVerificationGate onVerify={async code=>{const {error}=await supabase.auth.mfa.verify({...mfaChallenge,code});if(error)return error.message;setMfaChallenge(null);return '';}} onSignOut={()=>supabase.auth.signOut()}/>;
@@ -1004,6 +1042,7 @@ function App() {
       ? <LoginPortal audience={portal} onSubmit={(event) => login(event, portal === 'admin')} onForgotPassword={requestPasswordReset} signing={signing} onRegister={(role) => { setAuthRegistrationRole(role); setAuthModal(true); }} onAdminSignIn={() => window.location.assign(`${window.location.pathname}?portal=admin`)}/>
       : showComplaintRoom ? <PublicComplaintRoom properties={dashboardAds} onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={publicListings} onSignIn={() => { window.location.assign(`${window.location.pathname}?portal=account`); }} onAdminSignIn={() => { window.location.assign(`${window.location.pathname}?portal=admin`); }} onComplaint={() => setShowComplaintRoom(true)}/>}
     {authModal && <AuthDialog initialRole={authRegistrationRole} onSubmit={login} onSignUp={registerLandlord} onForgotPassword={requestPasswordReset} onClose={() => setAuthModal(false)} signing={signing}/>}
+    {confirmDialog && <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !confirmBusy && (setConfirmDialog(null), setConfirmReason(''))}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"><div className={`confirm-icon ${confirmDialog.variant || 'danger'}`}><AlertTriangle size={22}/></div><span className="eyebrow">{confirmDialog.variant === 'warning' ? 'REVIEW THIS CHANGE' : 'CONFIRM ACTION'}</span><h2 id="confirm-dialog-title">{confirmDialog.title}</h2><p id="confirm-dialog-message" className="confirm-message">{confirmDialog.message}</p><p className="confirm-detail">{confirmDialog.detail}</p>{confirmDialog.requireReason && <label className="confirm-reason">Reason for voiding<textarea autoFocus rows={3} value={confirmReason} onChange={(event) => setConfirmReason(event.target.value)} maxLength={500} placeholder="Add a short reason for the transaction history"/></label>}<div className="confirm-actions"><button type="button" className="secondary-button" disabled={confirmBusy} onClick={() => { setConfirmDialog(null); setConfirmReason(''); }}>Cancel</button><button type="button" className={`confirm-submit ${confirmDialog.variant || 'danger'}`} disabled={confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())} onClick={runConfirmedAction}>{confirmBusy ? 'Please wait…' : confirmDialog.confirmLabel || 'Confirm'}</button></div></section></div>}
     {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
