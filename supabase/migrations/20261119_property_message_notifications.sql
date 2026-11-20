@@ -21,7 +21,7 @@ begin
     values (
       new.recipient_id,
       'New property message',
-      'A property participant sent you a message. Open your property workspace to read it.',
+      'A property participant sent you a message. Open your property portal to read it.',
       'property_message',
       '#workspace',
       new.id

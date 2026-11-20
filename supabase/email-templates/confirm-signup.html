@@ -6,7 +6,7 @@
     </div>
     <div style="padding:30px">
       <p style="font-size:15px;line-height:1.7;margin:0 0 14px">Hello {{ .Data.full_name }},</p>
-      <p style="font-size:14px;line-height:1.7;color:#56636a;margin:0 0 22px">Confirm this email address to activate your private landlord workspace for <strong>{{ .Data.business_name }}</strong>.</p>
+      <p style="font-size:14px;line-height:1.7;color:#56636a;margin:0 0 22px">Confirm this email address to activate your landlord account for <strong>{{ .Data.business_name }}</strong>.</p>
       <p style="margin:0 0 23px"><a href="{{ .SiteURL }}/?auth=confirm&amp;token_hash={{ .TokenHash }}" style="display:inline-block;background:#174f49;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:13px 20px;border-radius:7px">Confirm my Yemilaz Properties account</a></p>
       <p style="font-size:12px;line-height:1.7;color:#78838a;margin:0">If you did not request this account, you can ignore this email. For your security, this confirmation link expires and can only be used once.</p>
     </div>
