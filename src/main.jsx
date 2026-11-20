@@ -25,6 +25,44 @@ function BrandLockup({ name, className = '' }) {
   return <div className={`brand-lockup ${className}`}><BrandSymbol/><span><b>{brandName(name)}</b><small>PROPERTY MANAGEMENT</small></span></div>;
 }
 
+function PropertyHelpAssistant() {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [messages, setMessages] = useState([{ from: 'assistant', text: 'Hello! I can help you find your way around Yemilaz Properties. What would you like to know?' }]);
+  const threadRef = useRef(null);
+  useEffect(() => { if (open && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [messages, open]);
+  const prompts = ['Find a property', 'Create an account', 'Send a complaint', 'Manage my property'];
+  function answer(question) {
+    const q = question.toLowerCase();
+    if (/pay|fee|deposit|rent due|refund|payment/.test(q)) return 'Check the written agreement for the amount, due date, payee and refund conditions, and request a receipt for every payment. Yemilaz Properties listings are not payment instructions; verify payment details directly with the authorized property representative.';
+    if (/manage|management|dashboard|portfolio|workspace/.test(q)) return 'Property owners can use the private workspace to manage listings, properties, tenants, staff, documents, maintenance, messages and complaints. Choose Property portal to sign in. If you need a different role later, submit an account upgrade request with supporting documents for administrator review.';
+    if (/account|sign.?up|register|tenant|agent|caretaker|lawyer/.test(q)) return 'Choose Property portal, then create an account and select the profile that fits you. Tenants and property professionals can be linked to a property by its owner or manager. If you need a different role later, submit an account upgrade request with supporting documents for administrator review.';
+    if (/complain|complaint|repair|maintenance|issue/.test(q)) return 'You can lodge a complaint from the Complaint room or your signed-in property workspace. Choose the property and the relevant recipient. Replies and unread complaint messages appear in the private complaint workspace and notifications.';
+    if (/message|notification|reply/.test(q)) return 'Use Property conversations in your account to message the linked people for a property. New replies and complaint updates appear in Notifications; open the conversation to read them.';
+    if (/document|pdf|sign|agreement|download/.test(q)) return 'Signed-in users can review and download documents shared with their account from the tenancy documents or shared property files area. If a document is missing, ask the property manager to confirm it was linked to your profile.';
+    if (/staff|team|permission|role/.test(q)) return 'Property owners and administrators can invite staff and assign access according to their responsibilities. Give each person only the access they need, and review or remove access when their work changes.';
+    if (/help|contact|person|human|support/.test(q)) return 'You can reach the support team at hello@yemilazproperties.com. For a property-specific dispute, use the private complaint room so the relevant participants can follow the case.';
+    if (/find|search|listing|rent|buy|sale|property|home|shop|office|warehouse|farm|land/.test(q)) return 'Browse available homes, shops, offices, warehouses, land and farms from “Find a property” on the homepage. Open a listing to review its details and contact the advertiser. Confirm price, ownership and terms independently before making a payment.';
+    return 'I can help with property listings, account types, messages, complaints, tenancy documents, payments and property management. You can also email hello@yemilazproperties.com for further assistance.';
+  }
+  function send(value = draft) {
+    const text = value.trim();
+    if (!text) return;
+    setMessages((current) => [...current, { from: 'you', text }, { from: 'assistant', text: answer(text) }]);
+    setDraft('');
+  }
+  return <aside className={`property-help-assistant ${open ? 'is-open' : ''}`} aria-label="Yemilaz help assistant">
+    {open && <section className="assistant-panel" aria-label="Chat with the help assistant">
+      <header className="assistant-header"><span className="assistant-avatar"><Sparkles size={17}/></span><span><b>Yemilaz Help</b><small><i/> Here to guide you</small></span><button type="button" aria-label="Close assistant" onClick={() => setOpen(false)}><X size={18}/></button></header>
+      <div className="assistant-thread" ref={threadRef} aria-live="polite">{messages.map((message, index) => <p className={`assistant-message ${message.from}`} key={`${index}-${message.from}`}>{message.text}</p>)}</div>
+      {messages.length === 1 && <div className="assistant-prompts">{prompts.map((prompt) => <button type="button" key={prompt} onClick={() => send(prompt)}>{prompt}</button>)}</div>}
+      <form className="assistant-compose" onSubmit={(event) => { event.preventDefault(); send(); }}><input aria-label="Ask a question" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask a question…" maxLength={500}/><button type="submit" aria-label="Send question" disabled={!draft.trim()}><ArrowRight size={17}/></button></form>
+      <div className="assistant-footnote">Need a person? <a href="mailto:hello@yemilazproperties.com">Email support</a><br/>For urgent safety concerns, contact local emergency services.</div>
+    </section>}
+    <button type="button" className="assistant-launcher" aria-expanded={open} onClick={() => setOpen((value) => !value)}><span className="assistant-launcher-icon">{open ? <X size={19}/> : <MessageCircle size={19}/>}</span><span>{open ? 'Close help' : 'How can we help?'}</span></button>
+  </aside>;
+}
+
 function BrandWatermark() {
   return <div className="brand-watermark" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <BrandSymbol key={index}/>)}</div>;
 }
@@ -905,7 +943,7 @@ function App() {
   if (portal === 'admin' && auth && (!adminChecked || (!isPlatformAdmin && !platformPermissions.length && !isPlatformReviewer))) return <AdminAccessScreen checking={!adminChecked} onSignOut={() => supabase.auth.signOut()}/>;
   if (portal === 'review' && auth && (!adminChecked || !isPlatformReviewer)) return <AdminAccessScreen checking={!adminChecked} onSignOut={() => supabase.auth.signOut()}/>;
 
-  if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/><ScrollNavigation/>
+  if (!auth) return <div className="brand-site theme-jade"><BrandWatermark logo="horizon"/><ScrollNavigation/><PropertyHelpAssistant/>
     {portal === 'admin' || portal === 'account'
       ? <LoginPortal audience={portal} onSubmit={(event) => login(event, portal === 'admin')} onForgotPassword={requestPasswordReset} signing={signing} onRegister={(role) => { setAuthRegistrationRole(role); setAuthModal(true); }} onAdminSignIn={() => window.location.assign(`${window.location.pathname}?portal=admin`)}/>
       : showComplaintRoom ? <PublicComplaintRoom properties={dashboardAds} onBack={() => setShowComplaintRoom(false)} onSubmit={submitComplaint}/> : <PublicLanding properties={publicListings} onSignIn={() => { window.location.assign(`${window.location.pathname}?portal=account`); }} onAdminSignIn={() => { window.location.assign(`${window.location.pathname}?portal=admin`); }} onComplaint={() => setShowComplaintRoom(true)}/>}
@@ -914,14 +952,14 @@ function App() {
     {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
 
-  if (portal === 'review' && auth) return <PlatformUpgradeReview client={supabase} isAdmin={isPlatformAdmin} onBack={() => window.location.assign(`${window.location.pathname}?portal=account`)} onManageStaff={() => window.location.assign(`${window.location.pathname}?portal=admin&adminPage=Platform%20staff`)}/>;
+  if (portal === 'review' && auth) return <><PlatformUpgradeReview client={supabase} isAdmin={isPlatformAdmin} onBack={() => window.location.assign(`${window.location.pathname}?portal=account`)} onManageStaff={() => window.location.assign(`${window.location.pathname}?portal=admin&adminPage=Platform%20staff`)}/><PropertyHelpAssistant/></>;
 
-  if (portal !== 'admin' && ['agent', 'caretaker', 'lawyer'].includes(accountRole)) return <><StaffPortal auth={auth} role={accountRole} staff={staffAccount} tenants={staffAssignments} properties={propertyRecords} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} canReviewUpgrades={isPlatformReviewer} onOpenUpgradeReview={() => window.location.assign(`${window.location.pathname}?portal=review`)}/><ScrollNavigation/></>;
-  if (portal !== 'admin' && ['stakeholder', 'tenant'].includes(accountRole)) return <><StakeholderPortal auth={auth} role={accountRole} tenant={tenantAccount} contacts={tenantContacts} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} properties={propertyRecords} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} onDownloadDocuments={downloadTenantPortalDocuments} tenantDocsBusy={tenantDocsBusy} canReviewUpgrades={isPlatformReviewer} onOpenUpgradeReview={() => window.location.assign(`${window.location.pathname}?portal=review`)}/><ScrollNavigation/></>;
+  if (portal !== 'admin' && ['agent', 'caretaker', 'lawyer'].includes(accountRole)) return <><StaffPortal auth={auth} role={accountRole} staff={staffAccount} tenants={staffAssignments} properties={propertyRecords} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} canReviewUpgrades={isPlatformReviewer} onOpenUpgradeReview={() => window.location.assign(`${window.location.pathname}?portal=review`)}/><ScrollNavigation/><PropertyHelpAssistant/></>;
+  if (portal !== 'admin' && ['stakeholder', 'tenant'].includes(accountRole)) return <><StakeholderPortal auth={auth} role={accountRole} tenant={tenantAccount} contacts={tenantContacts} cases={stakeholderCases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} properties={propertyRecords} onSubmitComplaint={submitComplaint} notifications={notifications} onReadNotification={markNotificationRead} complaintUnreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => { markComplaintNotificationsRead(item.id); setActiveComplaint(item); }} onSignOut={() => supabase.auth.signOut()} toast={toast} onClearToast={() => setToast('')} onDownloadDocuments={downloadTenantPortalDocuments} tenantDocsBusy={tenantDocsBusy} canReviewUpgrades={isPlatformReviewer} onOpenUpgradeReview={() => window.location.assign(`${window.location.pathname}?portal=review`)}/><ScrollNavigation/><PropertyHelpAssistant/></>;
 
   return <>
     <div className={`app-shell theme-${landlordProfile?.brand_template || 'jade'}`}>
-      <ScrollNavigation/>
+      <ScrollNavigation/><PropertyHelpAssistant/>
       <BrandWatermark logo={landlordProfile?.brand_logo || 'horizon'}/>
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
         <div className="brand"><BrandLockup name={landlordProfile?.business_name || 'Yemilaz Properties'} logo={landlordProfile?.brand_logo || 'horizon'} className="workspace-brand"/><button className="mobile-close" onClick={() => setMenu(false)}><X size={19}/></button></div>
