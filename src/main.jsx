@@ -13,7 +13,20 @@ const supabase = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPAB
   ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
   : null;
 const currency = (value) => `₦${Number(value || 0).toLocaleString('en-NG')}`;
-const dateLabel = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-NG', { month: 'short', day: '2-digit', year: 'numeric' }) : '—';
+const dateLabel = (value) => {
+  if (!value) return '—';
+  const text = String(value).trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  let date;
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) return '—';
+  } else {
+    date = new Date(text);
+  }
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-NG', { month: 'short', day: '2-digit', year: 'numeric' });
+};
 const initials = (name = '') => name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase();
 const displayPersonName = (name = '') => String(name).trim().toLocaleLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, separator, letter) => `${separator}${letter.toLocaleUpperCase()}`);
 const brandName = (value = 'Yemilaz Properties') => String(value).trim() || 'Yemilaz Properties';
