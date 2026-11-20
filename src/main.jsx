@@ -1005,19 +1005,40 @@ function App() {
       setEditingPerson(null); setToast(isRenewalRent && status === 'paid' && renewedLeaseEnd ? `Renewal recorded. The lease has been extended through ${dateLabel(renewedLeaseEnd)}.` : 'Transaction updated and saved.'); return;
     }
     const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
+    if (kind === 'tenant' && (!form.get('lease_start') || !form.get('lease_end') || form.get('lease_end') < form.get('lease_start') || Number(form.get('rent_amount')) <= 0)) { setToast('Enter valid tenancy dates and a rent amount greater than zero.'); return; }
+    const tenantExtraNames = kind === 'tenant' ? form.getAll('move_in_charge_description').map((value) => String(value).trim()) : [];
+    const tenantExtraCategories = kind === 'tenant' ? form.getAll('move_in_charge_category').map(String) : [];
+    const tenantExtraAmounts = kind === 'tenant' ? form.getAll('move_in_charge_amount').map((value) => Number(value || 0)) : [];
+    const tenantExtraStatuses = kind === 'tenant' ? form.getAll('move_in_charge_status').map(String) : [];
+    const tenantExtraDates = kind === 'tenant' ? form.getAll('move_in_charge_date').map((value) => String(value || '')) : [];
+    const tenantExtraCharges = tenantExtraNames.map((description, index) => ({
+      description, category: tenantExtraCategories[index], amount: tenantExtraAmounts[index], status: tenantExtraStatuses[index],
+      paid_at: tenantExtraStatuses[index] === 'paid' ? (tenantExtraDates[index] || localDateISO()) : null,
+      due_date: tenantExtraStatuses[index] === 'unpaid' ? (tenantExtraDates[index] || null) : null,
+    }));
+    if (tenantExtraCharges.some((charge) => !charge.description || !['security', 'utilities', 'cleaning', 'maintenance', 'other'].includes(charge.category) || !Number.isFinite(charge.amount) || charge.amount <= 0 || !['paid', 'unpaid'].includes(charge.status))) { setToast('Complete each added charge with a description, type, positive amount and status.'); return; }
     const row = kind === 'tenant'
-      ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, rent_amount: Number(form.get('rent_amount') || 0), rent_frequency: form.get('rent_frequency') || 'yearly', lease_start: form.get('lease_start') || null, lease_end: form.get('lease_end') || null, notes: form.get('notes') || null }
+      ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, permanent_address: String(form.get('permanent_address') || '').trim() || null, rent_amount: Number(form.get('rent_amount') || 0), rent_frequency: form.get('rent_frequency') || 'yearly', lease_start: form.get('lease_start') || null, lease_end: form.get('lease_end') || null, notes: form.get('notes') || null }
       : kind === 'guarantor'
         ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, relationship: form.get('relationship') || null, occupation: form.get('occupation') || null, address: form.get('address') || null }
         : { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, role: form.get('role') || editingPerson.role, notes: form.get('notes') || null };
     setSaving(true);
     const { data, error } = await supabase.from(table).update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
-    setSaving(false);
-    if (error) { setToast(error.message); return; }
-    if (kind === 'tenant') { setTenants((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); const { data: charges } = await supabase.from('service_charges').select('*').eq('owner_id', auth.id).order('created_at', { ascending: false }); if (charges) setPaymentRecords(charges); }
+    if (error) { setSaving(false); setToast(error.message); return; }
+    if (kind === 'tenant') {
+      setTenants((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
+      if (tenantExtraCharges.length) {
+        const newCharges = tenantExtraCharges.map((charge) => ({ owner_id: auth.id, tenant_id: data.id, property_id: data.property_id || null, description: `${charge.description} — ${data.full_name}`, category: charge.category, amount: charge.amount, due_date: charge.due_date, paid_at: charge.paid_at, status: charge.status }));
+        const { data: insertedCharges, error: chargeError } = await supabase.from('service_charges').insert(newCharges).select();
+        if (chargeError) { setSaving(false); setEditingPerson(null); setToast(`Tenant details were saved, but the new charge could not be recorded: ${chargeError.message}`); return; }
+        if (insertedCharges) setPaymentRecords((current) => [...insertedCharges, ...current]);
+      }
+      const { data: charges } = await supabase.from('service_charges').select('*').eq('owner_id', auth.id).order('created_at', { ascending: false }); if (charges) setPaymentRecords(charges);
+    }
     else if (kind === 'staff') { setStaffRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); }
     else setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
-    setEditingPerson(null); setToast('Contact details updated.');
+    setSaving(false);
+    setEditingPerson(null); setToast(kind === 'tenant' && tenantExtraCharges.length ? 'Tenant details and additional charges saved.' : 'Contact details updated.');
   }
 
   async function voidTransaction(record, confirmed = false, reason = '') {
@@ -2119,8 +2140,8 @@ function EditPersonModal({ person, saving, onSave, onClose }) {
   return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={onSave}>
     <div className="modal-heading"><div><span className="eyebrow">PEOPLE DIRECTORY</span><h2>{heading}</h2><p>Update this contact in your property records.</p></div><button type="button" className="icon-button" aria-label="Close edit form" onClick={onClose}><X size={19}/></button></div>
     <label>Full name<input required name="full_name" defaultValue={person.full_name}/></label>
-    <div className="form-row"><label>Email<input name="email" type="email" defaultValue={person.email || ''}/></label><label>Phone<input name="phone" defaultValue={person.phone || ''}/></label></div>
-    {isTenant && <><div className="form-row"><label>Lease start<input name="lease_start" type="date" defaultValue={person.lease_start || ''}/></label><label>Lease end<input name="lease_end" type="date" defaultValue={person.lease_end || ''}/></label></div><div className="form-row"><label>Rent amount (₦)<input name="rent_amount" type="number" min="0" step="0.01" defaultValue={person.rent_amount || 0}/></label><label>Rent frequency<select name="rent_frequency" defaultValue={person.rent_frequency || 'yearly'}><option value="yearly">Yearly</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option></select></label></div><label>Notes<input name="notes" defaultValue={person.notes || ''}/></label><p className="setup-note">Lease dates, amount and frequency control future scheduled rent. Existing payment history is preserved.</p></>}
+    <div className="form-row"><label>Email<input name="email" type="email" defaultValue={person.email || ''}/></label><label>Phone<input name="phone" type="tel" defaultValue={person.phone || ''}/></label></div>
+    {isTenant && <><label>Permanent address <small>(optional)</small><input name="permanent_address" defaultValue={person.permanent_address || ''} autoComplete="street-address"/></label><div className="form-section-title">Tenancy terms</div><div className="form-row"><label>Lease start<input required name="lease_start" type="date" defaultValue={person.lease_start || ''}/></label><label>Lease end<input required name="lease_end" type="date" defaultValue={person.lease_end || ''}/></label></div><div className="form-row"><label>Rent amount (₦)<input required name="rent_amount" type="number" min="0.01" step="0.01" defaultValue={person.rent_amount || 0}/></label><label>Rent frequency<select name="rent_frequency" defaultValue={person.rent_frequency || 'yearly'}><option value="yearly">Yearly</option><option value="quarterly">Quarterly</option><option value="monthly">Monthly</option></select></label></div><label>Notes<input name="notes" defaultValue={person.notes || ''}/></label><p className="setup-note">Lease dates, amount and frequency control future scheduled rent. Existing payment history is preserved.</p><div className="form-section-title">Add charges to the tenant ledger</div><MoveInChargesEditor title="Additional tenant charges" intro="Add a new payment or outstanding charge, such as security or electricity. Existing receipts will not be changed."/></>}
     {isGuarantor && <><div className="form-row"><label>Relationship<input name="relationship" defaultValue={person.relationship || ''}/></label><label>Occupation<input name="occupation" defaultValue={person.occupation || ''}/></label></div><label>Address<input name="address" defaultValue={person.address || ''}/></label></>}
     {!isTenant && !isGuarantor && <><label>Role<select name="role" defaultValue={person.role || 'agent'}><option value="agent">Agent</option><option value="caretaker">Caretaker</option><option value="lawyer">Lawyer</option></select><small>Changing this updates the linked profile’s permissions.</small></label><label>Notes<input name="notes" defaultValue={person.notes || ''}/></label></>}
     <div className="modal-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
@@ -2141,7 +2162,7 @@ function TransactionEditModal({ transaction, tenants, saving, onSave, onClose })
   </form></div>;
 }
 
-function MoveInChargesEditor() {
+function MoveInChargesEditor({ title = 'Other move-in charges', intro = 'Add any agreed security, electricity, cleaning or other charges. Each line is saved separately to the tenant’s ledger.' }) {
   const [charges, setCharges] = useState([]);
   const addCharge = () => setCharges((items) => [...items, {
     id: crypto.randomUUID(), category: 'utilities', description: '', amount: '', status: 'paid',
@@ -2151,7 +2172,7 @@ function MoveInChargesEditor() {
   const paidTotal = charges.reduce((total, item) => total + (item.status === 'paid' ? Number(item.amount || 0) : 0), 0);
   const outstandingTotal = charges.reduce((total, item) => total + (item.status === 'unpaid' ? Number(item.amount || 0) : 0), 0);
   return <section className="move-in-charges" aria-label="Additional move-in charges">
-    <div className="move-in-charges-heading"><div><b>Other move-in charges</b><p>Add any agreed security, electricity, cleaning or other charges. Each line is saved separately to the tenant’s ledger.</p></div><button type="button" className="secondary-button compact-button" onClick={addCharge}><Plus size={14}/> Add charge</button></div>
+    <div className="move-in-charges-heading"><div><b>{title}</b><p>{intro}</p></div><button type="button" className="secondary-button compact-button" onClick={addCharge}><Plus size={14}/> Add charge</button></div>
     {charges.map((charge, index) => <div className="payment-entry-group move-in-charge-row" key={charge.id}>
       <div className="move-in-charge-title"><b>Additional charge {index + 1}</b><button type="button" className="text-button" onClick={() => setCharges((items) => items.filter((item) => item.id !== charge.id))}>Remove</button></div>
       <div className="form-row"><label>Charge type<select name="move_in_charge_category" value={charge.category} onChange={(event) => updateCharge(charge.id, 'category', event.target.value)}><option value="security">Security / caution</option><option value="utilities">Electricity / utilities</option><option value="cleaning">Cleaning</option><option value="maintenance">Maintenance</option><option value="other">Other</option></select></label><label>Description<input required name="move_in_charge_description" value={charge.description} onChange={(event) => updateCharge(charge.id, 'description', event.target.value)} placeholder="e.g. Electricity contribution"/></label></div>
