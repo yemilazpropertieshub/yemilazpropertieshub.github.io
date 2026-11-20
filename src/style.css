@@ -582,3 +582,44 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .staff-portal .upgrade-request-intro p{font-size:11px;line-height:1.7}
 @media(max-width:700px){.staff-portal{padding:24px 16px 78px;gap:13px}.staff-portal .tenant-profile-card{padding:23px 20px}.staff-portal .tenant-profile-section{padding:19px}.staff-portal .tenant-profile-grid{gap:12px}}
 @media(max-width:570px){.staff-portal .tenant-profile-card h1{font-size:24px}.staff-portal .tenant-profile-facts{gap:15px}.staff-portal .tenant-document-row{align-items:flex-start;flex-direction:column}.staff-portal .panel-heading{align-items:flex-start;flex-direction:column}.staff-portal .tenant-profile-section .table-wrap{overflow-x:auto}.staff-portal table{min-width:680px}}
+.caretaker-tools{display:grid;gap:18px}
+.caretaker-section-heading{padding:5px 2px 1px}
+.caretaker-section-heading .eyebrow{color:#8a7652;letter-spacing:1.5px}
+.caretaker-section-heading h2{margin:8px 0 5px;color:#1a3037;font:650 22px/1.3 Manrope,Arial,sans-serif}
+.caretaker-section-heading p{margin:0;color:#687871;font-size:12px;line-height:1.65}
+.caretaker-tool-card{min-width:0}
+.caretaker-work-order{padding:17px 0;border-top:1px solid #edf1ee}
+.caretaker-work-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.caretaker-work-heading b,.caretaker-history-row b,.caretaker-schedule-row b{color:#243b40;font-size:12px}
+.caretaker-work-heading p{margin:7px 0;color:#687871;font-size:11px;line-height:1.65}
+.caretaker-work-heading small,.caretaker-history-row small,.caretaker-schedule-row small{display:block;margin-top:5px;color:#78857f;font-size:10px;line-height:1.55;text-transform:capitalize}
+.caretaker-update-form{display:flex;align-items:flex-end;gap:10px;margin-top:14px;padding:13px;border:1px solid #edf1ee;border-radius:10px;background:#f9fbfa}
+.caretaker-update-form label,.caretaker-reply-form label,.caretaker-form>label,.caretaker-form .form-row label{display:grid;gap:6px;flex:1;color:#43575a;font-size:10px;font-weight:650}
+.caretaker-update-form select,.caretaker-update-form input,.caretaker-reply-form textarea,.caretaker-form input:not([type=checkbox]),.caretaker-form select,.caretaker-form textarea{width:100%;min-height:38px;padding:8px 10px;border:1px solid #dfe8e3;border-radius:8px;background:#fff;color:#243a3e;font:inherit;font-size:11px;line-height:1.5}
+.caretaker-reply-form{display:grid;justify-items:start;gap:8px;margin:12px 0 0;padding:0 2px}
+.caretaker-reply-form textarea{width:100%;resize:vertical}
+.caretaker-reply-form .text-button{min-height:34px}
+.caretaker-timeline-note{padding:11px 13px;border-left:3px solid #87a999;border-radius:0 8px 8px 0;background:#f3f8f5;color:#425b56;font-size:11px;line-height:1.65}
+.caretaker-timeline-note small{display:block;margin-top:5px;color:#819088;font-size:9px}
+.caretaker-form{display:grid;gap:13px}
+.caretaker-form .form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.caretaker-form label>small{color:#78857f;font-size:9px;font-weight:400;line-height:1.5}
+.caretaker-form input[type=file]{padding:7px;background:#fff}
+.caretaker-form textarea{resize:vertical}
+.caretaker-checklist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 16px;padding:13px;border:1px solid #e5ece8;border-radius:10px;background:#f9fbfa}
+.caretaker-checklist legend{padding:0 5px;color:#43575a;font-size:10px;font-weight:700}
+.caretaker-checklist label{display:flex;align-items:center;gap:7px;color:#5c706a;font-size:10px;line-height:1.45}
+.caretaker-checklist input{accent-color:#17665b}
+.caretaker-two-column{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px}
+.caretaker-schedule-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-top:1px solid #edf1ee}
+.caretaker-date-chip{flex:none;min-width:76px;padding:7px;border-radius:8px;background:#edf5f1;color:#17594f;font-size:9px;font-weight:700;text-align:center}
+.caretaker-history-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:7px 14px;padding:13px 0;border-top:1px solid #edf1ee}
+.caretaker-history-row small{flex-basis:100%;margin-top:-3px}
+.caretaker-history-row .text-button{font-size:10px}
+.caretaker-contact-actions{display:flex;gap:9px;white-space:nowrap}
+.caretaker-contact-actions a{color:#17665b;font-size:10px;font-weight:700;text-decoration:none}
+.caretaker-contact-actions a:hover{text-decoration:underline}
+.staff-portal .caretaker-tools .status-pill{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border:1px solid #e3eae6;border-radius:99px;background:#f5f8f6;color:#53655f;font-size:9px;text-transform:capitalize;white-space:nowrap}
+.staff-portal .caretaker-tools .status-pill.urgent{border-color:#f3d8cd;background:#fff3ef;color:#a4432b}
+@media(max-width:800px){.caretaker-two-column{grid-template-columns:1fr}}
+@media(max-width:570px){.caretaker-update-form{align-items:stretch;flex-direction:column}.caretaker-update-form .secondary-button{align-self:flex-start}.caretaker-form .form-row,.caretaker-checklist{grid-template-columns:1fr}.caretaker-section-heading h2{font-size:20px}.caretaker-work-heading{flex-direction:column}}
