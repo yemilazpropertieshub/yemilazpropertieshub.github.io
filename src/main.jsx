@@ -711,10 +711,13 @@ function App() {
     const extraAmounts = form.getAll('move_in_charge_amount').map((value) => Number(value || 0));
     const extraStatuses = form.getAll('move_in_charge_status').map(String);
     const extraDates = form.getAll('move_in_charge_date').map((value) => String(value || ''));
+    const extraPeriodStarts = form.getAll('move_in_charge_period_start').map((value) => String(value || ''));
+    const extraPeriodEnds = form.getAll('move_in_charge_period_end').map((value) => String(value || ''));
     const additionalCharges = extraNames.map((description, index) => ({
       description, category: extraCategories[index], amount: extraAmounts[index], status: extraStatuses[index],
       paid_at: extraStatuses[index] === 'paid' ? (extraDates[index] || localDateISO()) : null,
       due_date: extraStatuses[index] === 'unpaid' ? (extraDates[index] || null) : null,
+      period_start: extraPeriodStarts[index] || null, period_end: extraPeriodEnds[index] || null,
     }));
     if (!String(form.get('email') || '').trim() || !String(form.get('guarantor_email') || '').trim()) {
       setToast('Tenant and guarantor email addresses are required for individual PDF delivery.'); return;
@@ -726,7 +729,7 @@ function App() {
     if (!leaseStart || !leaseEnd || leaseEnd < leaseStart) { setToast('Enter a valid lease end date that is on or after the lease start date.'); return; }
     if (firstRentPayment < 0 || firstRentPayment > amount) { setToast('Enter no more than one rent period in Rent received. Record any deposit separately.'); return; }
     if (firstDepositPayment < 0) { setToast('Deposit received cannot be less than zero.'); return; }
-    if (additionalCharges.some((charge) => !charge.description || !['security', 'utilities', 'cleaning', 'maintenance', 'other'].includes(charge.category) || !Number.isFinite(charge.amount) || charge.amount <= 0 || !['paid', 'unpaid'].includes(charge.status))) { setToast('Complete each added charge with a description, type, positive amount and status.'); return; }
+    if (additionalCharges.some((charge) => !charge.description || !['security', 'utilities', 'cleaning', 'maintenance', 'other'].includes(charge.category) || !Number.isFinite(charge.amount) || charge.amount <= 0 || !['paid', 'unpaid'].includes(charge.status) || Boolean(charge.period_start) !== Boolean(charge.period_end) || (charge.period_start && charge.period_end < charge.period_start))) { setToast('Complete each added charge with a description, type, positive amount and status. Enter both period dates and make sure the end is not before the start.'); return; }
     if (propertyId && firstRentPayment + firstDepositPayment <= 0) { setToast('Record a rent or deposit payment before allocating this property.'); return; }
     setSaving(true);
     const { data: tenant, error } = await supabase.from('tenants').insert({
@@ -750,7 +753,7 @@ function App() {
     const initialPayments = [
       ...(firstRentPayment > 0 ? [{ owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `Initial rent payment — ${name}`, category: 'rent', amount: firstRentPayment, due_date: leaseStart, paid_at: rentPaymentDate, status: 'paid' }] : []),
       ...(firstDepositPayment > 0 ? [{ owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `Initial deposit received — ${name}`, category: 'deposit', amount: firstDepositPayment, due_date: null, paid_at: depositPaymentDate, status: 'paid' }] : []),
-      ...additionalCharges.map((charge) => ({ owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `${charge.description} — ${name}`, category: charge.category, amount: charge.amount, due_date: charge.due_date, paid_at: charge.paid_at, status: charge.status })),
+      ...additionalCharges.map((charge) => ({ owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `${charge.description} — ${name}`, category: charge.category, amount: charge.amount, due_date: charge.due_date, paid_at: charge.paid_at, period_start: charge.period_start, period_end: charge.period_end, status: charge.status })),
     ];
     if (initialPayments.length) {
       const { data: payments, error: paymentError } = await supabase.from('service_charges').insert(initialPayments).select();
@@ -983,7 +986,7 @@ function App() {
       const requestedMonths = isRenewalRent && form.get('lease_extension_months') ? Number(form.get('lease_extension_months')) : null;
       const durationChanged = requestedMonths !== (editingPerson.lease_extension_months || null);
       const shouldSyncRenewal = isRenewalRent && ['paid', 'unpaid'].includes(status) && (status !== editingPerson.status || (status === 'paid' && durationChanged));
-      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status: isRenewalRent ? editingPerson.status : status, lease_extension_months: isRenewalRent && status === 'paid' ? editingPerson.lease_extension_months : requestedMonths, edited_at: new Date().toISOString(), edited_by: auth.id };
+      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, period_start: form.get('period_start') || null, period_end: form.get('period_end') || null, status: isRenewalRent ? editingPerson.status : status, lease_extension_months: isRenewalRent && status === 'paid' ? editingPerson.lease_extension_months : requestedMonths, edited_at: new Date().toISOString(), edited_by: auth.id };
       setSaving(true);
       const { data: savedRow, error: saveError } = await supabase.from('service_charges').update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
       let data = savedRow, error = saveError;
@@ -1011,12 +1014,15 @@ function App() {
     const tenantExtraAmounts = kind === 'tenant' ? form.getAll('move_in_charge_amount').map((value) => Number(value || 0)) : [];
     const tenantExtraStatuses = kind === 'tenant' ? form.getAll('move_in_charge_status').map(String) : [];
     const tenantExtraDates = kind === 'tenant' ? form.getAll('move_in_charge_date').map((value) => String(value || '')) : [];
+    const tenantExtraPeriodStarts = kind === 'tenant' ? form.getAll('move_in_charge_period_start').map((value) => String(value || '')) : [];
+    const tenantExtraPeriodEnds = kind === 'tenant' ? form.getAll('move_in_charge_period_end').map((value) => String(value || '')) : [];
     const tenantExtraCharges = tenantExtraNames.map((description, index) => ({
       description, category: tenantExtraCategories[index], amount: tenantExtraAmounts[index], status: tenantExtraStatuses[index],
       paid_at: tenantExtraStatuses[index] === 'paid' ? (tenantExtraDates[index] || localDateISO()) : null,
       due_date: tenantExtraStatuses[index] === 'unpaid' ? (tenantExtraDates[index] || null) : null,
+      period_start: tenantExtraPeriodStarts[index] || null, period_end: tenantExtraPeriodEnds[index] || null,
     }));
-    if (tenantExtraCharges.some((charge) => !charge.description || !['security', 'utilities', 'cleaning', 'maintenance', 'other'].includes(charge.category) || !Number.isFinite(charge.amount) || charge.amount <= 0 || !['paid', 'unpaid'].includes(charge.status))) { setToast('Complete each added charge with a description, type, positive amount and status.'); return; }
+    if (tenantExtraCharges.some((charge) => !charge.description || !['security', 'utilities', 'cleaning', 'maintenance', 'other'].includes(charge.category) || !Number.isFinite(charge.amount) || charge.amount <= 0 || !['paid', 'unpaid'].includes(charge.status) || Boolean(charge.period_start) !== Boolean(charge.period_end) || (charge.period_start && charge.period_end < charge.period_start))) { setToast('Complete each added charge with a description, type, positive amount and status. Enter both period dates and make sure the end is not before the start.'); return; }
     const row = kind === 'tenant'
       ? { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, permanent_address: String(form.get('permanent_address') || '').trim() || null, rent_amount: Number(form.get('rent_amount') || 0), rent_frequency: form.get('rent_frequency') || 'yearly', lease_start: form.get('lease_start') || null, lease_end: form.get('lease_end') || null, notes: form.get('notes') || null }
       : kind === 'guarantor'
@@ -1028,7 +1034,7 @@ function App() {
     if (kind === 'tenant') {
       setTenants((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
       if (tenantExtraCharges.length) {
-        const newCharges = tenantExtraCharges.map((charge) => ({ owner_id: auth.id, tenant_id: data.id, property_id: data.property_id || null, description: `${charge.description} — ${data.full_name}`, category: charge.category, amount: charge.amount, due_date: charge.due_date, paid_at: charge.paid_at, status: charge.status }));
+        const newCharges = tenantExtraCharges.map((charge) => ({ owner_id: auth.id, tenant_id: data.id, property_id: data.property_id || null, description: `${charge.description} — ${data.full_name}`, category: charge.category, amount: charge.amount, due_date: charge.due_date, paid_at: charge.paid_at, period_start: charge.period_start, period_end: charge.period_end, status: charge.status }));
         const { data: insertedCharges, error: chargeError } = await supabase.from('service_charges').insert(newCharges).select();
         if (chargeError) { setSaving(false); setEditingPerson(null); setToast(`Tenant details were saved, but the new charge could not be recorded: ${chargeError.message}`); return; }
         if (insertedCharges) setPaymentRecords((current) => [...insertedCharges, ...current]);
@@ -2156,6 +2162,7 @@ function TransactionEditModal({ transaction, tenants, saving, onSave, onClose })
     <div className="form-row"><label>Tenant<select name="tenant_id" defaultValue={transaction.tenant_id || ''}><option value="">Property / general charge</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name}</option>)}</select></label><label>Category<select name="category" defaultValue={transaction.category || 'other'}><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="utilities">Utilities</option><option value="maintenance">Maintenance</option><option value="security">Security</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></label></div>
     <label>Amount (₦)<input required name="amount" type="number" min="0" step="0.01" defaultValue={transaction.amount}/></label>
     {isRenewalRent && <label>Renewal duration<select name="lease_extension_months" defaultValue={transaction.lease_extension_months || ''}><option value="">Use the original agreement term</option><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="9">9 months</option><option value="12">12 months</option><option value="18">18 months</option><option value="24">24 months</option></select><small>The lease end date is extended from its current value when this renewal is recorded as paid.</small></label>}
+    <div className="form-row"><label>Payment period starts <small>(optional)</small><input name="period_start" type="date" defaultValue={transaction.period_start || ''}/></label><label>Payment period ends <small>(optional)</small><input name="period_end" type="date" min={transaction.period_start || undefined} defaultValue={transaction.period_end || ''}/></label></div>
     <div className="form-row"><label>Status<select name="status" defaultValue={transaction.status}><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="waived">Waived</option></select></label><label>Due date<input name="due_date" type="date" defaultValue={transaction.due_date || ''}/></label></div>
     <label>Paid date<input name="paid_at" type="date" defaultValue={transaction.paid_at || ''}/></label>
     <div className="modal-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>
@@ -2166,7 +2173,7 @@ function MoveInChargesEditor({ title = 'Other move-in charges', intro = 'Add any
   const [charges, setCharges] = useState([]);
   const addCharge = () => setCharges((items) => [...items, {
     id: crypto.randomUUID(), category: 'utilities', description: '', amount: '', status: 'paid',
-    paidAt: localDateISO(), dueDate: '',
+    paidAt: localDateISO(), dueDate: '', periodStart: '', periodEnd: '',
   }]);
   const updateCharge = (id, field, value) => setCharges((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item));
   const paidTotal = charges.reduce((total, item) => total + (item.status === 'paid' ? Number(item.amount || 0) : 0), 0);
@@ -2177,6 +2184,7 @@ function MoveInChargesEditor({ title = 'Other move-in charges', intro = 'Add any
       <div className="move-in-charge-title"><b>Additional charge {index + 1}</b><button type="button" className="text-button" onClick={() => setCharges((items) => items.filter((item) => item.id !== charge.id))}>Remove</button></div>
       <div className="form-row"><label>Charge type<select name="move_in_charge_category" value={charge.category} onChange={(event) => updateCharge(charge.id, 'category', event.target.value)}><option value="security">Security / caution</option><option value="utilities">Electricity / utilities</option><option value="cleaning">Cleaning</option><option value="maintenance">Maintenance</option><option value="other">Other</option></select></label><label>Description<input required name="move_in_charge_description" value={charge.description} onChange={(event) => updateCharge(charge.id, 'description', event.target.value)} placeholder="e.g. Electricity contribution"/></label></div>
       <div className="form-row"><label>Amount (₦)<input required name="move_in_charge_amount" type="number" min="0.01" step="0.01" value={charge.amount} onChange={(event) => updateCharge(charge.id, 'amount', event.target.value)} placeholder="0.00"/></label><label>Status<select name="move_in_charge_status" value={charge.status} onChange={(event) => updateCharge(charge.id, 'status', event.target.value)}><option value="paid">Paid</option><option value="unpaid">Unpaid / outstanding</option></select></label></div>
+      <div className="form-row"><label>Payment period starts <small>(optional)</small><input name="move_in_charge_period_start" type="date" value={charge.periodStart} onChange={(event) => updateCharge(charge.id, 'periodStart', event.target.value)}/></label><label>Payment period ends <small>(optional)</small><input name="move_in_charge_period_end" type="date" min={charge.periodStart || undefined} value={charge.periodEnd} onChange={(event) => updateCharge(charge.id, 'periodEnd', event.target.value)}/></label></div>
       <label>{charge.status === 'paid' ? 'Date received' : 'Due date'}<input name="move_in_charge_date" type="date" value={charge.status === 'paid' ? charge.paidAt : charge.dueDate} onChange={(event) => updateCharge(charge.id, charge.status === 'paid' ? 'paidAt' : 'dueDate', event.target.value)}/></label>
     </div>)}
     {charges.length > 0 && <div className="move-in-charge-totals"><span>Additional charges paid <b>{currency(paidTotal)}</b></span><span>Additional charges outstanding <b>{currency(outstandingTotal)}</b></span></div>}
