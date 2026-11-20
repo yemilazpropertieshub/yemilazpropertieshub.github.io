@@ -182,6 +182,12 @@ function App() {
   const [mfaChallenge, setMfaChallenge] = useState(null);
 
   useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(() => setToast(''), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  useEffect(() => {
     document.title = auth
       ? `${landlordProfile?.business_name || 'Yemilaz Properties'} · Yemilaz Properties`
       : 'Yemilaz Properties | Find your place';
@@ -1071,7 +1077,7 @@ function App() {
     {authModal && <AuthDialog initialRole={authRegistrationRole} onSubmit={login} onSignUp={registerLandlord} onForgotPassword={requestPasswordReset} onClose={() => setAuthModal(false)} signing={signing}/>}
     {confirmDialog && <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !confirmBusy && (setConfirmDialog(null), setConfirmReason(''), setConfirmError(''))}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"><div className={`confirm-icon ${confirmDialog.variant || 'danger'}`}><AlertTriangle size={22}/></div><span className="eyebrow">{confirmDialog.variant === 'warning' ? 'REVIEW THIS CHANGE' : 'CONFIRM ACTION'}</span><h2 id="confirm-dialog-title">{confirmDialog.title}</h2><p id="confirm-dialog-message" className="confirm-message">{confirmDialog.message}</p><p className="confirm-detail">{confirmDialog.detail}</p>{confirmError && <p className="confirm-error" role="alert">{confirmError}</p>}{confirmDialog.requireReason && <label className="confirm-reason">Reason for voiding<textarea autoFocus rows={3} value={confirmReason} onChange={(event) => { setConfirmReason(event.target.value); setConfirmError(''); }} maxLength={500} placeholder="Add a short reason for the transaction history"/></label>}<div className="confirm-actions"><button type="button" className="secondary-button" disabled={confirmBusy} onClick={() => { setConfirmDialog(null); setConfirmReason(''); setConfirmError(''); }}>Cancel</button><button type="button" className={`confirm-submit ${confirmDialog.variant || 'danger'}`} disabled={confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())} onClick={runConfirmedAction}>{confirmBusy ? 'Please wait…' : confirmDialog.confirmLabel || 'Confirm'}</button></div></section></div>}
     {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
-    {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
+    {toast && <div className="toast" role="status" aria-live="polite"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={() => setToast('')}><X size={15}/></button></div>}
   </div>;
 
   if (portal === 'review' && auth) return <><PlatformUpgradeReview client={supabase} isAdmin={isPlatformAdmin} onBack={() => window.location.assign(`${window.location.pathname}?portal=account`)} onManageStaff={() => window.location.assign(`${window.location.pathname}?portal=admin&adminPage=Platform%20staff`)}/><PropertyHelpAssistant/></>;
@@ -1171,7 +1177,7 @@ function App() {
 
     {confirmDialog && <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !confirmBusy && (setConfirmDialog(null), setConfirmReason(''), setConfirmError(''))}><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message"><div className={`confirm-icon ${confirmDialog.variant || 'danger'}`}><AlertTriangle size={22}/></div><span className="eyebrow">{confirmDialog.variant === 'warning' ? 'REVIEW THIS CHANGE' : 'CONFIRM ACTION'}</span><h2 id="confirm-dialog-title">{confirmDialog.title}</h2><p id="confirm-dialog-message" className="confirm-message">{confirmDialog.message}</p><p className="confirm-detail">{confirmDialog.detail}</p>{confirmError && <p className="confirm-error" role="alert">{confirmError}</p>}{confirmDialog.requireReason && <label className="confirm-reason">Reason for voiding<textarea autoFocus rows={3} value={confirmReason} onChange={(event) => { setConfirmReason(event.target.value); setConfirmError(''); }} maxLength={500} placeholder="Add a short reason for the transaction history"/></label>}<div className="confirm-actions"><button type="button" className="secondary-button" disabled={confirmBusy} onClick={() => { setConfirmDialog(null); setConfirmReason(''); setConfirmError(''); }}>Cancel</button><button type="button" className={`confirm-submit ${confirmDialog.variant || 'danger'}`} disabled={confirmBusy || (confirmDialog.requireReason && !confirmReason.trim())} onClick={runConfirmedAction}>{confirmBusy ? 'Please wait…' : confirmDialog.confirmLabel || 'Confirm'}</button></div></section></div>}
     {authNotice && <AuthNoticeDialog notice={authNotice} onClose={() => setAuthNotice(null)} onResend={resendConfirmation} onUpdatePassword={saveNewPassword} signing={signing}/>}
-    {toast && <div className="toast"><Check size={16}/>{toast}<button onClick={() => setToast('')}><X size={15}/></button></div>}
+    {toast && <div className="toast" role="status" aria-live="polite"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={() => setToast('')}><X size={15}/></button></div>}
   </>;
 }
 
