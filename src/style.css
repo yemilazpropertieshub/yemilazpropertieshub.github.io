@@ -672,6 +672,17 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .pagination-jump label{display:flex;align-items:center;gap:6px;color:#738079;font-size:10px}
 .pagination-jump input{width:58px;height:32px;padding:0 7px;border:1px solid #e2e9e4;border-radius:8px;color:#243a3e;font:inherit}
 @media(max-width:570px){.pagination-controls{align-items:flex-start;gap:10px}.pagination-count{flex-basis:100%}.pagination-pages{gap:4px}.pagination-pages button{min-height:34px;padding:0 8px}.pagination-pages .pagination-page{min-width:34px}.pagination-jump{margin-left:auto}}
+.staff-payment-register{display:grid;gap:12px}
+.staff-payment-form{display:grid;gap:12px;padding:16px;border:1px solid #e7eee9;border-radius:12px;background:#f9fbfa}
+.staff-payment-form .form-row{margin:0}
+.staff-payment-form label{display:flex;flex-direction:column;gap:6px;min-width:0;color:#43575a;font-size:10px;font-weight:650}
+.staff-payment-form label small{color:#7b8983;font-size:9px;font-weight:400}
+.staff-payment-form input:not([type=checkbox]),.staff-payment-form select{width:100%;min-height:40px;padding:8px 10px;border:1px solid #dfe8e3;border-radius:8px;background:#fff;color:#243a3e;font:inherit;font-size:11px}
+.staff-payment-form .staff-payment-visibility{display:flex;align-items:center;flex-direction:row;gap:8px;font-weight:600}
+.staff-payment-form .staff-payment-visibility input{accent-color:#17665b}
+.staff-payment-form .setup-note{margin:0}
+.staff-payment-history-title{margin:6px 0 0;color:#243b40;font:650 15px/1.4 Manrope,Arial,sans-serif}
+@media(max-width:570px){.staff-payment-form{padding:12px}.staff-payment-register>.panel-heading{align-items:flex-start}}
 
 .confirm-error{margin:14px 0 0;padding:11px 13px;border:1px solid #f0c9c1;border-radius:9px;background:#fff5f2;color:#923c30;font-size:11px;line-height:1.55;overflow-wrap:anywhere}
 

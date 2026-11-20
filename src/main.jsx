@@ -134,7 +134,7 @@ const nav = [
   { title: 'Portfolio & tenancy', links: [['Properties', Building2], ['Tenants', Users], ['Rent schedule', CalendarDays, 'Rent & lease schedule'], ['Payments & charges', Wallet], ['Property insights', Sparkles, 'Portfolio insights']] },
   { title: 'Property operations', links: [['Maintenance', Wrench], ['Inspections', Check], ['Property incidents', ShieldCheck, 'Incident reports'], ['Property notices', Bell, 'Property updates'], ['Complaints', CircleHelp]] },
   { title: 'Lettings & enquiries', links: [['Short-let requests', CalendarDays, 'Short-stay enquiries'], ['Enquiries', FileText, 'Listing enquiries'], ['Property requests', FileText, 'Property wanted requests'], ['Viewing requests', CalendarDays], ['Viewing calendar', CalendarDays], ['Listing reports', ShieldCheck]] },
-  { title: 'People & team', links: [['Guarantors', ShieldCheck], ['Caretakers', KeyRound], ['Agents', Users], ['Lawyers', ShieldCheck]] },
+  { title: 'People & team', links: [['Guarantors', ShieldCheck], ['Caretakers', KeyRound], ['Agents', Users], ['Lawyers', ShieldCheck], ['Staff payments', Wallet]] },
   { title: 'Messages & records', links: [['Property messages', MessageCircle, 'Messages'], ['Notifications', Bell], ['Documents & signatures', PenLine, 'Agreements & signatures'], ['Property documents', FileText, 'Property files'], ['Email delivery', Bell, 'Document delivery']] },
   { title: 'Account & oversight', links: [['Landlord profile', UserRound], ['Security & privacy', ShieldCheck], ['Tenant profile requests', UserRound, 'Tenant profile corrections'], ['Audit history', Clock3], ['Account upgrades', UserRound, 'Role change requests']] },
 ];
@@ -556,7 +556,7 @@ function App() {
     if (!auth || !supabase) { setRecords([]); return; }
     if (page === 'Properties') { setRecords(propertyRecords); return; }
     if (page === 'Payments & charges') { setRecords(paymentRecords); return; }
-    const table = { Guarantors: 'guarantors', Caretakers: 'staff', Agents: 'staff', Lawyers: 'staff', Enquiries: 'property_enquiries', 'Short-let requests': 'property_enquiries', 'Property requests': 'property_wanted_requests', 'Viewing requests': 'property_viewing_requests', 'Viewing calendar': 'property_viewing_requests', 'Listing reports': 'property_listing_reports', Complaints: 'property_complaints', Maintenance: 'maintenance_requests' }[page];
+    const table = { Guarantors: 'guarantors', Caretakers: 'staff', Agents: 'staff', Lawyers: 'staff', 'Staff payments': 'staff_payment_records', Enquiries: 'property_enquiries', 'Short-let requests': 'property_enquiries', 'Property requests': 'property_wanted_requests', 'Viewing requests': 'property_viewing_requests', 'Viewing calendar': 'property_viewing_requests', 'Listing reports': 'property_listing_reports', Complaints: 'property_complaints', Maintenance: 'maintenance_requests' }[page];
     if (!table) { setRecords([]); return; }
     if (page === 'Short-let requests') {
       const ids = propertyRecords.filter(isShortLetProperty).map((property) => property.id);
@@ -569,8 +569,8 @@ function App() {
     if (page === 'Agents') request = request.eq('role', 'agent');
     if (page === 'Lawyers') request = request.eq('role', 'lawyer');
     if (page === 'Complaints' && !isPlatformAdmin && !platformPermissions.includes('complaints_read')) request = request.eq('landlord_id', auth.id);
-    request.then(({ data, error }) => { if (error) setToast(error.message); else setRecords((data || []).map((item) => ({ ...item, property_name: propertyRecords.find((property) => property.id === item.property_id)?.name || 'Property listing' }))); });
-  }, [auth, page, propertyRecords, paymentRecords, isPlatformAdmin, platformPermissions]);
+    request.then(({ data, error }) => { if (error) setToast(error.message); else setRecords((data || []).map((item) => ({ ...item, property_name: propertyRecords.find((property) => property.id === item.property_id)?.name || 'Property listing', staff_name: staffRecords.find((staff) => staff.id === item.staff_id)?.full_name || 'Team member', tenant_name: tenants.find((tenant) => tenant.id === item.tenant_id)?.full_name || '—' }))); });
+  }, [auth, page, propertyRecords, paymentRecords, staffRecords, tenants, isPlatformAdmin, platformPermissions]);
 
   useEffect(() => {
     if (!auth || !adminChecked || new URLSearchParams(window.location.search).get('portal') !== 'admin' || isPlatformAdmin) return;
@@ -1778,6 +1778,7 @@ function StaffPortal({ auth, role, staff, tenants, properties, cases, activeComp
     <div className="tenant-profile-grid"><section className="panel tenant-profile-section"><span className="eyebrow">CONTACT DETAILS</span><h2>{staffName}</h2><p>{staff?.email || auth.email}</p><p>{staff?.phone || 'Ask your property manager to add a phone number.'}</p><p>{staff?.permanent_address || 'No address is on file.'}</p></section><section className="panel tenant-profile-section"><span className="eyebrow">YOUR RESPONSIBILITIES</span><h2>{roleLabel}</h2><p>{roleDescription}</p><div className="tenant-profile-facts"><span>Assigned properties <b>{properties.length}</b></span><span>Tenant contacts <b>{tenants.length}</b></span></div></section></div>
     <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">PROPERTY RECORDS</span><h2>Properties assigned to you</h2><p>Review the locations and property details connected to your role.</p></div></div>{properties.length ? <div className="property-grid">{properties.map((property) => <article className="panel tenant-profile-section staff-property-card" key={property.id}><span className="eyebrow">{property.property_type || 'PROPERTY'} · {property.status || 'ASSIGNED'}</span><h2>{property.name}</h2><p>{[property.address, property.city, property.state, property.country].filter(Boolean).join(', ') || 'Address not provided'}</p></article>)}</div> : <EmptyState title="No properties assigned yet" text="Your property manager will add the property records connected to your role here."/>}</section>
     <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">TENANT SUPPORT</span><h2>Tenant contacts</h2><p>People associated with the properties you support. Use the private conversation area below for property-related messages.</p></div></div>{tenants.length ? <div className="table-wrap"><table><thead><tr><th>TENANT</th><th>EMAIL</th><th>PHONE</th><th>AGREEMENT</th><th>PROPERTY</th><th>CONTACT</th></tr></thead><tbody>{tenants.map((tenant) => <tr key={tenant.id}><td>{displayPersonName(tenant.full_name)}</td><td>{tenant.email || '—'}</td><td>{tenant.phone || '—'}</td><td>{dateLabel(tenant.lease_start)} – {dateLabel(tenant.lease_end)}</td><td>{properties.find((property) => property.id === tenant.property_id)?.name || 'Not allocated'}</td><td><span className="caretaker-contact-actions">{tenant.email&&<a href={`mailto:${tenant.email}`}>Email</a>}{tenant.phone&&<a href={`tel:${tenant.phone.replace(/[^+\d]/g,'')}`}>Call</a>}</span></td></tr>)}</tbody></table></div> : <EmptyState title="No tenant contacts assigned" text="Tenant records connected to your properties will appear here when your property manager assigns them."/>}</section>
+    <StaffPaymentRegister auth={auth} staff={staff} tenants={tenants} properties={properties}/>
     <ParticipantDocumentLibrary auth={auth}/>
     {role === 'caretaker' && staff && <CaretakerOperations auth={auth} staff={staff} tenants={tenants} properties={properties}/>}
     <AccountUpgradePanel client={supabase} auth={auth} role={role} canReview={canReviewUpgrades} onOpenReview={onOpenUpgradeReview}/>
@@ -1785,6 +1786,71 @@ function StaffPortal({ auth, role, staff, tenants, properties, cases, activeComp
     {['agent','caretaker','lawyer'].includes(role) && <ComplaintInbox records={cases} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={messages} onSend={onSend} onResolution={onResolution} currentUserId={auth.id} allowNew={false} unreadCounts={complaintUnreadCounts} onOpenComplaint={onOpenComplaint}/>}
     {toast && <div className="toast"><Check size={16}/>{toast}<button aria-label="Dismiss notification" onClick={onClearToast}><X size={15}/></button></div>}
   </main></div>;
+}
+
+function StaffPaymentTenantView({ tenant }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    let active = true;
+    if (!supabase || !tenant?.id) return () => { active = false; };
+    supabase.from('staff_payment_records').select('id,staff_id,category,description,amount,paid_at,reference,created_at')
+      .eq('tenant_id', tenant.id).eq('tenant_visible', true).order('paid_at', { ascending: false })
+      .then(({ data, error }) => { if (active && !error) setRows(data || []); });
+    return () => { active = false; };
+  }, [tenant?.id]);
+  if (!rows.length) return null;
+  return <section className="panel tenant-profile-section"><span className="eyebrow">SHARED PAYMENT RECORDS</span><h2>Payments shared with you</h2><p>These are payment records the property team chose to share with your account. They are not rent charges.</p><div className="table-wrap"><table><thead><tr><th>DATE</th><th>TEAM MEMBER</th><th>TYPE</th><th>DESCRIPTION</th><th>AMOUNT</th><th>REFERENCE</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{dateLabel(row.paid_at)}</td><td>Property team</td><td>{row.category.replaceAll('_', ' ')}</td><td>{row.description}</td><td>{currency(row.amount)}</td><td>{row.reference || '—'}</td></tr>)}</tbody></table></div></section>;
+}
+
+function StaffPaymentRegister({ auth, staff, tenants, properties }) {
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  async function load() {
+    if (!supabase || !staff?.id) return;
+    const { data, error } = await supabase.from('staff_payment_records').select('*').eq('staff_id', staff.id).order('paid_at', { ascending: false });
+    if (error) setFeedback(`Payment records are unavailable: ${error.message}`); else { setRows(data || []); setFeedback(''); }
+  }
+  useEffect(() => { load(); }, [staff?.id]);
+  async function submit(event) {
+    event.preventDefault();
+    if (!staff?.id || !auth?.id) return;
+    const form = event.currentTarget; const values = new FormData(form);
+    const tenantId = String(values.get('tenant_id') || '') || null;
+    const tenant = tenants.find((item) => item.id === tenantId);
+    const amount = Number(values.get('amount'));
+    if (!Number.isFinite(amount) || amount <= 0) { setFeedback('Enter a payment amount greater than zero.'); return; }
+    if (values.get('tenant_visible') === 'on' && !tenantId) { setFeedback('Choose the tenant before sharing this record with them.'); return; }
+    setBusy(true);
+    const { error } = await supabase.from('staff_payment_records').insert({
+      owner_id: staff.owner_id, staff_id: staff.id, recorded_by: auth.id, tenant_id: tenantId,
+      property_id: tenant?.property_id || String(values.get('property_id') || '') || null,
+      payer_name: String(values.get('payer_name') || '').trim() || null,
+      category: values.get('category'), description: String(values.get('description') || '').trim(), amount,
+      paid_at: values.get('paid_at') || localDateISO(), reference: String(values.get('reference') || '').trim() || null,
+      tenant_visible: values.get('tenant_visible') === 'on',
+    });
+    setBusy(false);
+    if (error) { setFeedback(`Payment could not be recorded: ${error.message}`); return; }
+    form.reset();
+    setFeedback('Payment received and recorded. Your landlord can now review it.');
+    await load();
+  }
+  return <section className="panel tenant-profile-section staff-payment-register">
+    <div className="panel-heading"><div><span className="eyebrow">PAYMENT RECORDS</span><h2>Payments received</h2><p>Record a payment you received for property related work. Your landlord can review every entry.</p></div></div>
+    <form className="staff-payment-form" onSubmit={submit}>
+      <div className="form-row"><label>Payment type<select name="category" defaultValue="other"><option value="management_fee">Management fee</option><option value="commission">Letting or sales commission</option><option value="maintenance_fee">Maintenance or service fee</option><option value="legal_fee">Legal fee</option><option value="viewing_fee">Viewing or inspection fee</option><option value="other">Other</option></select></label><label>Amount received (₦)<input type="number" name="amount" min="1" step="0.01" required placeholder="e.g. 25000"/></label></div>
+      <div className="form-row"><label>Payment description<input name="description" required minLength="2" maxLength="500" placeholder="What was this payment for?"/></label><label>Date received<input type="date" name="paid_at" required defaultValue={localDateISO()}/></label></div>
+      <div className="form-row"><label>Paid by <small>(optional)</small><input name="payer_name" maxLength="160" placeholder="Name of payer or organisation"/></label><label>Payment reference <small>(optional)</small><input name="reference" maxLength="160" placeholder="Transfer reference, receipt number, etc."/></label></div>
+      <div className="form-row"><label>Related tenant <small>(optional)</small><select name="tenant_id" defaultValue=""><option value="">Not linked to a tenant</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name} · {properties.find((property) => property.id === tenant.property_id)?.name || 'Property not allocated'}</option>)}</select></label><label>Property <small>(optional)</small><select name="property_id" defaultValue=""><option value="">Not linked to a property</option>{properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label></div>
+      <label className="staff-payment-visibility"><input type="checkbox" name="tenant_visible"/> Share this record with the linked tenant</label>
+      <p className="setup-note">Tenant sharing is optional. When enabled, the linked tenant can view this payment record in their portal. It does not create a rent charge or change the tenancy ledger.</p>
+      <button className="primary-button" disabled={busy}>{busy ? 'Saving payment…' : 'Record payment received'}</button>
+    </form>
+    {feedback && <p className="setup-note" role="status">{feedback}</p>}
+    <h3 className="staff-payment-history-title">Your recorded payments</h3>
+    {rows.length ? <div className="table-wrap"><table><thead><tr><th>DATE</th><th>TYPE</th><th>DESCRIPTION</th><th>AMOUNT</th><th>TENANT</th><th>VISIBILITY</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{dateLabel(row.paid_at)}</td><td>{row.category.replaceAll('_', ' ')}</td><td>{row.description}</td><td>{currency(row.amount)}</td><td>{tenants.find((tenant) => tenant.id === row.tenant_id)?.full_name || '—'}</td><td>{row.tenant_visible ? 'Shared with tenant' : 'Private to landlord and team'}</td></tr>)}</tbody></table></div> : <EmptyState title="No payment records yet" text="Payments you receive for property related work will appear here."/>}
+  </section>;
 }
 
 function CaretakerOperations({ auth, staff, tenants, properties }) {
@@ -1945,6 +2011,7 @@ function TenantOperations({ auth, tenant, properties }) {
     <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">ACCOUNT ACTIVITY</span><h2>Rent and charge history</h2><p>When your lease reaches its end date, an unpaid renewal charge is added here for the next rent period. It appears in outstanding charges until your property manager records it as paid or updates the tenancy. Contact your property manager if the amount or renewal needs correction. Online payments are not available in this portal; receipts shared with you are available in your property documents.</p></div></div>{charges.length?<div className="table-wrap"><table><thead><tr><th>CHARGE</th><th>DUE</th><th>PAID</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>{charges.map(c=><tr key={c.id}><td>{c.description||c.category||'Property charge'}</td><td>{dateLabel(c.due_date)}</td><td>{dateLabel(c.paid_at?.slice(0,10))}</td><td>{currency(c.amount)}</td><td><span className={`status-pill status-${c.status}`}>{c.status}</span></td></tr>)}</tbody></table></div>:<p>No charges have been recorded for this property account yet.</p>}</section>
     {notices.length>0&&<section className="panel tenant-profile-section"><span className="eyebrow">FROM YOUR PROPERTY MANAGER</span><h2>Property notices</h2>{notices.map(n=><article className="tenant-notice" key={n.id}><div><b>{n.title}</b><small>{n.priority} · {dateLabel(n.created_at?.slice(0,10))}</small></div><p>{n.body}</p></article>)}</section>}
     <PropertyMessagePanel auth={auth} tenant={tenant}/>
+    <StaffPaymentTenantView tenant={tenant}/>
     <section className="panel tenant-profile-section tenant-maintenance"><div className="panel-heading"><div><span className="eyebrow">PROPERTY CARE</span><h2>Maintenance requests</h2><p>Track progress and reply to the assigned team here.</p></div></div><form onSubmit={submit}><div className="form-row"><label>Issue title<input required name="title" minLength="3" maxLength="160" placeholder="e.g. Water leak in bathroom"/></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div><label>Describe the issue<textarea name="description" required minLength="10" maxLength="4000" rows="3"/></label><label>Photo evidence (optional)<input type="file" name="evidence" accept="image/jpeg,image/png,image/webp"/><small>JPG, PNG or WebP, up to 10 MB.</small></label><button className="primary-button" disabled={busy}>{busy?'Sending…':'Send maintenance request'}</button></form>{message&&<p className="setup-note" role="status">{message}</p>}<div className="tenant-request-list">{items.map(item=><article key={item.id}><div className="tenant-maintenance-heading"><b>{item.title}</b><span className="status-pill">{item.status.replaceAll('_',' ')}</span></div><span>{item.description}</span><small>{item.priority} priority · {dateLabel(item.created_at?.slice(0,10))}{item.due_date?` · Target ${dateLabel(item.due_date)}`:''}{item.assigned_staff_id?` · Assigned to ${staff.find(s=>s.id===item.assigned_staff_id)?.full_name||'property team'}`:''}</small>{item.evidence_path&&<button className="text-button" onClick={()=>openEvidence(item.evidence_path)}>View photo evidence</button>}{updates.filter(u=>u.request_id===item.id).map(u=><div className="maintenance-update" key={u.id}><p>{u.body}</p><small>{u.author_id===auth.id?'You · ':'Property team · '}{new Date(u.created_at).toLocaleString()}</small></div>)}<form className="maintenance-reply" onSubmit={e=>reply(e,item)}><label htmlFor={`maintenance-reply-${item.id}`}>Add an update</label><textarea id={`maintenance-reply-${item.id}`} rows="2" maxLength="3000" required value={replyDrafts[item.id]||''} onChange={e=>setReplyDrafts(all=>({...all,[item.id]:e.target.value}))}/><button className="secondary-button" disabled={busy}>Send update</button></form></article>)}</div>{!items.length&&<p>No maintenance requests yet.</p>}</section>
     <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">IMPORTANT DATES</span><h2>Inspections and lease dates</h2></div></div><div className="tenant-date-list">{tenant.lease_start&&<article><b>Lease started</b><span>{dateLabel(tenant.lease_start)}</span></article>}{tenant.lease_end&&<article><b>Lease ends</b><span>{dateLabel(tenant.lease_end)}</span></article>}{upcoming.map(i=><article key={i.id}><b>{i.inspection_type?.replaceAll('_',' ')||'Property inspection'}</b><span>{dateLabel(i.inspection_date)} · {i.notes||i.condition}</span></article>)}{!tenant.lease_start&&!tenant.lease_end&&!upcoming.length&&<p>No upcoming dates are recorded.</p>}</div></section>
     <section className="panel tenant-profile-section"><div className="panel-heading"><div><span className="eyebrow">SHARED PROPERTY FILES</span><h2>Documents from your landlord</h2></div><div className="tenant-document-filters"><label>Category<select aria-label="Filter property documents" value={docFilter} onChange={e=>setDocFilter(e.target.value)}><option value="all">All categories</option>{categories.map(c=><option value={c} key={c}>{c.replaceAll('_',' ')}</option>)}</select></label><label>Sort<select aria-label="Sort property documents" value={fileSort} onChange={e=>setFileSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></label></div></div>{sortedSharedFiles.map(file=><article className="tenant-document-row" key={file.id}><div><b>{file.title}</b><small>{file.document_category?.replaceAll('_',' ')||'Shared file'} · {dateLabel(file.created_at?.slice(0,10))}</small></div><button className="secondary-button" onClick={()=>openShared(file.storage_path)}><Download size={15}/> Download</button></article>)}{!sortedSharedFiles.length&&<p>No files match this filter, or no documents have been shared yet.</p>}</section>
@@ -2223,6 +2290,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
     Tenants: ['Tenant directory', 'Register tenants, record payments, and allocate available properties after payment.'],
     'Payments & charges': ['Payments & service charges', 'Record every rent payment, deposit, utility, maintenance and other property charge.'],
     Guarantors: ['Guarantor records', 'Keep tenant guarantor details available when you need them.'],
+    'Staff payments': ['Payments received by your team', 'Review payments recorded by assigned agents, caretakers, lawyers and other property staff. Tenant visibility is controlled on each record.'],
     Caretakers: ['Caretaker directory', 'Coordinate on-site teams across your properties.'],
     Lawyers: ['Lawyer directory', 'Connect your legal adviser with the tenants and property team involved in your portfolio.'],
     Agents: ['Agent directory', 'Your trusted partners for letting and sales.'],
@@ -2239,6 +2307,7 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
     Caretakers: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
     Lawyers: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
     Agents: [['Name', 'full_name'], ['Phone', 'phone'], ['Email', 'email'], ['Notes', 'notes']],
+    'Staff payments': [['Team member', 'staff_name'], ['Paid by', 'payer_name'], ['Tenant', 'tenant_name'], ['Property', 'property_name'], ['Payment type', 'category'], ['Description', 'description'], ['Amount', 'amount'], ['Date received', 'paid_at'], ['Tenant visibility', 'tenant_visible']],
     Enquiries: [['Property', 'property_name'], ['Name', 'name'], ['Email', 'email'], ['Phone', 'phone'], ['Message', 'message'], ['Received', 'created_at']],
     'Short-let requests': [['Property', 'property_name'], ['Guest', 'name'], ['Email', 'email'], ['Phone', 'phone'], ['Stay request', 'message'], ['Received', 'created_at']],
     'Property requests': [['Name', 'requester_name'], ['Email', 'requester_email'], ['Phone', 'requester_phone'], ['Looking for', 'property_type'], ['Purpose', 'listing_type'], ['Location', 'request_location'], ['Land size', 'land_size'], ['Bedrooms', 'bedrooms'], ['Budget', 'budget'], ['Details', 'details'], ['Received', 'created_at']],
@@ -2262,6 +2331,8 @@ function ManagementPage({ page, tenants, records, query, setQuery, openModal, on
     if (key === 'listing_type') return item === 'sale' ? 'Buy' : item === 'rent' ? 'Rent' : item || '—';
     if (key === 'created_at' || key === 'requested_at') return item ? new Date(item).toLocaleString() : '—';
     if (key === 'paid_at' || key === 'due_date') return item ? dateLabel(item) : '—';
+    if (key === 'tenant_visible') return item ? 'Shared with tenant' : 'Landlord and staff only';
+    if (key === 'category') return String(item || 'other').replaceAll('_', ' ');
     return item || '—';
   };
   const canAdd = ['Tenants','Properties','Payments & charges','Guarantors','Caretakers','Agents','Lawyers'].includes(page);
