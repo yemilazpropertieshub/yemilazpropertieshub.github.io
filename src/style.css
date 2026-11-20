@@ -328,3 +328,41 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 @media(max-width:570px){.public-nav nav>a:nth-child(2){display:inline-flex;font-size:10px}.public-nav nav{gap:8px}.feature-category-nav{gap:7px;margin:-5px auto 27px}.feature-category-nav>a{padding:7px 9px;font-size:9px}}
 @media(max-width:900px){.footer-main{grid-template-columns:auto 1fr;gap:14px 22px}.footer-main nav{grid-column:1/-1;order:3;padding-top:10px;border-top:1px solid #35515a}.footer-account{justify-content:flex-end}.footer-bottom{align-items:flex-start;flex-wrap:wrap}.footer-bottom>div{order:3;width:100%;justify-content:flex-start}}
 @media(max-width:570px){.public-support{padding:36px 18px 28px}.support-heading{display:block;margin-bottom:14px}.public-support h2{font-size:23px}.support-intro{margin-top:8px;font-size:10px}.support-grid{grid-template-columns:1fr;gap:8px}.public-support .support-grid article{padding:12px 13px;gap:12px}.support-grid h3{font-size:12px}.support-grid p{font-size:9px;line-height:1.5}.support-grid .policy-more-link{font-size:9px}.public-support .support-grid .support-contact{grid-column:auto}.public-support .support-faq{margin-top:9px;padding:11px 12px}.public-support .faq-item{padding:9px 10px}.public-footer{padding:17px 18px 11px}.footer-main{grid-template-columns:1fr auto;gap:11px 12px;padding-bottom:12px}.footer-main>.public-brand{grid-column:1/-1}.footer-main>p{font-size:10px}.footer-main>p span{font-size:8px}.footer-main nav{gap:8px 15px;padding-top:9px}.footer-main nav a,.footer-main nav button,.footer-account button{font-size:8px}.footer-account{gap:10px;padding-left:10px}.footer-bottom{gap:8px;font-size:8px}.footer-bottom>div{gap:8px 12px}.complaint-site .public-footer{padding:17px 18px}}
+.account-upgrade-page .welcome-row,.account-upgrade-review .welcome-row{align-items:flex-end;gap:18px}
+.upgrade-request-card,.reviewer-management{padding:20px;margin-bottom:14px;border-color:#e1e9e5;background:linear-gradient(135deg,#fff,#f8fbf9)}
+.upgrade-request-intro{display:flex;align-items:flex-start;gap:13px;margin-bottom:16px}
+.upgrade-request-icon{width:40px;height:40px;display:grid;place-items:center;flex:none;border-radius:11px;background:#eaf3ef;color:#17665b}
+.upgrade-request-intro h2,.reviewer-management h2{margin:1px 0 6px;color:#102b35;font:650 17px Manrope,Arial,sans-serif}
+.upgrade-request-intro p,.reviewer-management p{max-width:730px;margin:0;color:#6f7d79;font-size:11px;line-height:1.65}
+.upgrade-request-form{display:grid;gap:12px}
+.upgrade-request-form label,.upgrade-review-card label,.reviewer-assign-form label{display:flex;flex-direction:column;gap:6px;color:#42534d;font-size:10px;font-weight:650}
+.upgrade-request-form label small{color:#7b8984;font-size:9px;font-weight:400;line-height:1.5}
+.upgrade-request-form input:not([type=file]),.upgrade-request-form select,.upgrade-request-form textarea,.upgrade-review-card textarea,.reviewer-assign-form input{width:100%;min-height:39px;border:1px solid #dfe7e3;border-radius:6px;padding:9px 10px;background:#fff;color:#263831;font:inherit;font-size:11px}
+.upgrade-request-form textarea,.upgrade-review-card textarea{resize:vertical;line-height:1.55}
+.upgrade-request-form input[type=file]{padding:10px;border:1px dashed #bdcec6;border-radius:6px;background:#fff;font-size:10px}
+.upgrade-request-form .primary-button{justify-self:start;min-height:40px}
+.upgrade-open-status{display:flex;align-items:flex-start;gap:13px;padding:15px;border:1px solid #dce8e2;border-radius:8px;background:#f4f8f6}
+.upgrade-open-status b{display:block;margin:2px 0 5px;font:650 13px Manrope;color:#102b35}
+.upgrade-open-status p{margin:0;color:#70807a;font-size:10px;line-height:1.55}
+.upgrade-history{padding:16px}
+.upgrade-history .panel-heading{margin-bottom:8px}
+.upgrade-history h2{margin:3px 0;font-size:16px}
+.account-upgrade-page>.support-legal-note{margin:14px 0;color:#73817c;font-size:9px;line-height:1.6}
+.reviewer-management{display:grid;gap:13px}
+.reviewer-assign-form{display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:10px}
+.reviewer-assign-form .primary-button{min-height:39px}
+.reviewer-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;border-top:1px solid #e5ebe8;color:#465750;font-size:10px}
+.upgrade-review-list{display:grid;gap:12px}
+.upgrade-review-card{padding:18px}
+.upgrade-review-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:13px;border-bottom:1px solid #e8eeeb}
+.upgrade-review-heading h2{margin:5px 0 3px;font:650 17px Manrope;color:#102b35}
+.upgrade-review-heading a{color:#17665b;font-size:10px;text-decoration:none}
+.upgrade-review-heading>.invite-status{max-width:44%;white-space:normal;text-align:center;line-height:1.45}
+.upgrade-review-card h3{margin:15px 0 5px;font:650 11px Manrope;color:#42534d}
+.upgrade-review-justification,.upgrade-review-card>p{color:#64756f;font-size:11px;line-height:1.7;white-space:pre-wrap}
+.upgrade-evidence-list{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0;margin-bottom:10px;border-top:1px solid #edf1ef;border-bottom:1px solid #edf1ef}
+.upgrade-evidence-list>b{margin-right:5px;color:#465750;font-size:10px}
+.upgrade-evidence-list .secondary-button{min-height:31px;padding:6px 9px;font-size:9px}
+.upgrade-review-card .row-actions{margin-top:10px}
+.account-upgrade-review .setup-note{margin:0 0 12px}
+@media(max-width:650px){.account-upgrade-page .welcome-row,.account-upgrade-review .welcome-row{align-items:flex-start;flex-direction:column}.upgrade-request-card,.reviewer-management{padding:15px}.upgrade-request-intro{gap:10px}.upgrade-request-intro h2,.reviewer-management h2{font-size:15px}.reviewer-assign-form{grid-template-columns:1fr}.reviewer-assign-form .primary-button{justify-self:start}.upgrade-review-card{padding:14px}.upgrade-review-heading{flex-direction:column}.upgrade-review-heading>.invite-status{max-width:none}.upgrade-review-card .row-actions{flex-wrap:wrap}.upgrade-review-card .row-actions>*{flex:1 1 auto;justify-content:center}.upgrade-open-status{flex-wrap:wrap}}
