@@ -406,3 +406,40 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .upgrade-review-card .row-actions{margin-top:10px}
 .account-upgrade-review .setup-note{margin:0 0 12px}
 @media(max-width:650px){.account-upgrade-page .welcome-row,.account-upgrade-review .welcome-row{align-items:flex-start;flex-direction:column}.upgrade-request-card,.reviewer-management{padding:15px}.upgrade-request-intro{gap:10px}.upgrade-request-intro h2,.reviewer-management h2{font-size:15px}.reviewer-assign-form{grid-template-columns:1fr}.reviewer-assign-form .primary-button{justify-self:start}.upgrade-review-card{padding:14px}.upgrade-review-heading{flex-direction:column}.upgrade-review-heading>.invite-status{max-width:none}.upgrade-review-card .row-actions{flex-wrap:wrap}.upgrade-review-card .row-actions>*{flex:1 1 auto;justify-content:center}.upgrade-open-status{flex-wrap:wrap}}
+
+/* Public Nigeria advertised-price market overview */
+.market-overview{padding:64px clamp(22px,6vw,92px) 68px;background:linear-gradient(145deg,#f3f8f5,#fbfcfa 58%,#f2f7f4);border-top:1px solid #edf2ef;border-bottom:1px solid #e8efeb}
+.market-overview-heading{max-width:1440px;margin:0 auto 25px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+.market-overview-heading h2{margin:9px 0 7px;color:#1d3037;font-size:clamp(25px,3vw,34px);letter-spacing:-1.2px}
+.market-overview-heading p{margin:0;color:#718087;font-size:13px;line-height:1.7}
+.market-period{display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border:1px solid #dce8e2;border-radius:99px;background:#fff;color:#526660;font-size:10px;font-weight:700;white-space:nowrap}
+.market-period>span{width:7px;height:7px;border-radius:50%;background:#bd9a4a;box-shadow:0 0 0 3px #bd9a4a1c}
+.market-columns{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.market-card{padding:21px 23px 12px;border:1px solid #e1e9e5;border-radius:12px;background:#fff;box-shadow:0 12px 30px #18372b08}
+.market-card-title{display:flex;align-items:center;gap:12px;padding-bottom:17px;border-bottom:1px solid #edf1ef}
+.market-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:50%}
+.market-card.is-positive .market-icon{background:#e5f5ee;color:#168755}
+.market-card.is-negative .market-icon{background:#fff0ef;color:#cc5b58}
+.market-card-title h3{margin:0 0 3px;color:#23363c;font-size:16px}
+.market-card-title small{color:#84918d;font-size:10px}
+.market-card ol{list-style:none;padding:0;margin:0}
+.market-card li{display:grid;grid-template-columns:minmax(130px,1fr) auto minmax(100px,auto);grid-template-rows:auto auto;align-items:center;gap:4px 13px;padding:15px 1px;border-bottom:1px solid #edf1ef}
+.market-card li:last-child{border-bottom:0}
+.market-area{min-width:0;display:grid;gap:4px}
+.market-area b{overflow:hidden;color:#273a41;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.market-area small{overflow:hidden;color:#84918d;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.market-change{padding:6px 9px;border-radius:99px;font-size:11px;font-weight:750;white-space:nowrap}
+.is-positive .market-change{background:#eaf6f0;color:#168755}
+.is-negative .market-change{background:#fff0ef;color:#cc5b58}
+.market-card li>strong{justify-self:end;color:#23363c;font-size:12px;white-space:nowrap}
+.market-sample{grid-column:1/-1;color:#9aa49f;font-size:9px}
+.market-no-results{margin:20px 0;color:#788781;font-size:11px;line-height:1.7}
+.market-empty{max-width:1440px;min-height:92px;margin:0 auto;padding:20px 23px;display:flex;align-items:center;gap:13px;border:1px solid #e1e9e5;border-radius:11px;background:#fff}
+.market-empty-mark{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:10px;background:#edf5ef;color:#567d65}
+.market-empty b{color:#33463f;font-size:12px}
+.market-empty p{margin:5px 0 0;color:#7c8983;font-size:10px;line-height:1.65}
+.market-loading-dot{width:11px;height:11px;flex:none;border:2px solid #d5e3da;border-top-color:#247c60;border-radius:50%;animation:market-spin .8s linear infinite}
+@keyframes market-spin{to{transform:rotate(360deg)}}
+.market-method-note{max-width:1440px;margin:13px auto 0;color:#89948e;font-size:9px;line-height:1.65}
+@media(max-width:760px){.market-overview{padding:45px 22px 48px}.market-columns{grid-template-columns:1fr;gap:13px}.market-card{padding:17px 17px 9px}.market-card li{grid-template-columns:minmax(100px,1fr) auto auto;gap:4px 8px}.market-area b{font-size:12px}.market-area small{font-size:9px}.market-card li>strong{font-size:11px}.market-change{padding:5px 7px;font-size:10px}}
+@media(max-width:520px){.market-overview-heading{align-items:flex-start;flex-direction:column;gap:12px}.market-period{font-size:9px}.market-card li{grid-template-columns:minmax(90px,1fr) auto}.market-card li>strong{grid-column:2;grid-row:2}.market-sample{grid-column:1/-1}}
