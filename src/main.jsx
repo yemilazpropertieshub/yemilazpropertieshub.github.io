@@ -938,13 +938,27 @@ function App() {
     if (kind === 'charge') {
       const status = form.get('status');
       const tenant = tenants.find((item) => item.id === form.get('tenant_id'));
-      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status, edited_at: new Date().toISOString(), edited_by: auth.id };
+      const isRenewalRent = editingPerson.category === 'rent' && String(editingPerson.description || '').startsWith('Renewal rent · ');
+      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status: isRenewalRent ? editingPerson.status : status, edited_at: new Date().toISOString(), edited_by: auth.id };
       setSaving(true);
-      const { data, error } = await supabase.from('service_charges').update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
+      const { data: savedRow, error: saveError } = await supabase.from('service_charges').update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
+      let data = savedRow, error = saveError;
+      if (!error && isRenewalRent && status !== editingPerson.status && ['paid', 'unpaid'].includes(status)) {
+        const result = await supabase.rpc('set_rent_payment_status', { p_charge_id: editingPerson.id, p_status: status, p_paid_at: status === 'paid' ? (form.get('paid_at') || localDateISO()) : null, p_reason: null });
+        data = result.data; error = result.error;
+      }
       setSaving(false);
       if (error) { setToast(error.message); return; }
       setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
-      setEditingPerson(null); setToast('Transaction updated and saved.'); return;
+      let renewedLeaseEnd = null;
+      if (isRenewalRent && status !== editingPerson.status) {
+        const { data: updatedTenants } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
+        if (updatedTenants) {
+          setTenants(updatedTenants);
+          renewedLeaseEnd = updatedTenants.find((item) => item.id === (tenant?.id || editingPerson.tenant_id))?.lease_end || null;
+        }
+      }
+      setEditingPerson(null); setToast(isRenewalRent && status === 'paid' && renewedLeaseEnd ? `Renewal recorded. The lease has been extended through ${dateLabel(renewedLeaseEnd)}.` : 'Transaction updated and saved.'); return;
     }
     const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
     const row = kind === 'tenant'
@@ -974,7 +988,18 @@ function App() {
     if (!reason.trim()) { setConfirmError('Enter a reason before voiding this transaction.'); return false; }
     setTransactionActionId(record.id);
     let data, error;
-    try { ({ data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single()); }
+    try {
+      const isRenewalRent = record.category === 'rent' && String(record.description || '').startsWith('Renewal rent · ');
+      if (isRenewalRent) {
+        ({ data, error } = await supabase.rpc('set_rent_payment_status', { p_charge_id: record.id, p_status: 'voided', p_paid_at: null, p_reason: reason.trim() }));
+        if (!error) {
+          const { data: updatedTenants } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
+          if (updatedTenants) setTenants(updatedTenants);
+        }
+      } else {
+        ({ data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single());
+      }
+    }
     catch (requestError) { const message = `Could not void this transaction: ${requestError.message || 'Connection error. Please try again.'}`; setConfirmError(message); setToast(message); return false; }
     finally { setTransactionActionId(null); }
     if (error) { const message = `Could not void this transaction: ${error.message}`; setConfirmError(message); setToast(message); return false; }
@@ -994,13 +1019,28 @@ function App() {
       return;
     }
     setTransactionActionId(record.id);
-    let data, error;
-    try { ({ data, error } = await supabase.from('service_charges').update({ status, paid_at: status === 'paid' ? localDateISO() : null, edited_at: new Date().toISOString(), edited_by: auth.id }).eq('owner_id', auth.id).eq('id', record.id).select().single()); }
+    let data, error, renewalEndDate = null;
+    try {
+      const isRenewalRent = record.category === 'rent' && String(record.description || '').startsWith('Renewal rent · ');
+      if (isRenewalRent) {
+        ({ data, error } = await supabase.rpc('set_rent_payment_status', { p_charge_id: record.id, p_status: status, p_paid_at: status === 'paid' ? localDateISO() : null, p_reason: null }));
+        if (!error) {
+          const { data: updatedTenants, error: tenantError } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
+          if (tenantError) console.warn('Lease updated; tenant list will refresh on reload.', tenantError.message);
+          else if (updatedTenants) {
+            setTenants(updatedTenants);
+            if (status === 'paid') renewalEndDate = updatedTenants.find((tenant) => tenant.id === record.tenant_id)?.lease_end || null;
+          }
+        }
+      } else {
+        ({ data, error } = await supabase.from('service_charges').update({ status, paid_at: status === 'paid' ? localDateISO() : null, edited_at: new Date().toISOString(), edited_by: auth.id }).eq('owner_id', auth.id).eq('id', record.id).select().single());
+      }
+    }
     catch (requestError) { const message = `Could not update this payment: ${requestError.message || 'Connection error. Please try again.'}`; setConfirmError(message); setToast(message); return false; }
     finally { setTransactionActionId(null); }
     if (error) { const message = `Could not update this payment: ${error.message}`; setConfirmError(message); setToast(message); return false; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
-    setToast(status === 'paid' ? 'Payment recorded as paid.' : 'Payment marked unpaid.');
+    setToast(status === 'paid' && renewalEndDate ? `Renewal recorded. The lease now ends ${dateLabel(renewalEndDate)}.` : status === 'paid' ? 'Payment recorded as paid.' : 'Payment marked unpaid.');
     setConfirmError('');
     return true;
   }
