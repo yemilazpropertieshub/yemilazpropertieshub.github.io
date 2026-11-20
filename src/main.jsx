@@ -788,11 +788,14 @@ function App() {
       table = 'service_charges';
       const tenant = tenants.find((item) => item.id === form.get('tenant_id'));
       const status = form.get('status');
+      const isRenewalRent = Boolean(tenant) && form.get('category') === 'rent' && String(form.get('description') || '').toLowerCase().startsWith('renewal rent');
+      const requestedMonths = form.get('lease_extension_months') ? Number(form.get('lease_extension_months')) : null;
       row = {
         tenant_id: tenant?.id || null, property_id: tenant?.property_id || null,
         description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')),
-        due_date: form.get('due_date') || null, status,
-        paid_at: status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null,
+        due_date: form.get('due_date') || null, status: isRenewalRent && status === 'paid' ? 'unpaid' : status,
+        paid_at: isRenewalRent ? null : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null,
+        lease_extension_months: isRenewalRent ? requestedMonths : null,
       };
     } else if (page === 'Guarantors') {
       table = 'guarantors'; row = { full_name: form.get('full_name'), email: form.get('email') || null, phone: form.get('phone') || null, relationship: form.get('relationship') || null, address: form.get('address') || null, occupation: form.get('occupation') || null };
@@ -800,7 +803,18 @@ function App() {
       table = 'staff'; row = { full_name: form.get('full_name'), role: page === 'Caretakers' ? 'caretaker' : page === 'Lawyers' ? 'lawyer' : 'agent', email: form.get('email') || null, phone: form.get('phone') || null, notes: form.get('notes') || null };
     }
     setSaving(true);
+    let renewalEndDate = null;
     let { data, error } = await supabase.from(table).insert({ ...row, owner_id: auth.id }).select().single();
+    if (!error && page === 'Payments & charges' && data.tenant_id && form.get('category') === 'rent' && String(form.get('description') || '').toLowerCase().startsWith('renewal rent') && form.get('status') === 'paid') {
+      const extended = await supabase.rpc('set_rent_payment_status', { p_charge_id: data.id, p_status: 'paid', p_paid_at: form.get('paid_at') || localDateISO(), p_reason: null, p_duration_months: row.lease_extension_months });
+      if (extended.error) { setSaving(false); setToast(`Renewal was saved as unpaid because the lease could not be extended: ${extended.error.message}`); setPaymentRecords((current) => [data, ...current]); setModal(false); return; }
+      data = extended.data;
+      const { data: updatedTenants } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
+      if (updatedTenants) {
+        setTenants(updatedTenants);
+        renewalEndDate = updatedTenants.find((item) => item.id === data.tenant_id)?.lease_end || null;
+      }
+    }
     if (!error && page === 'Payments & charges' && evidenceFile instanceof File && evidenceFile.size > 0) {
       const safeName = evidenceFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const path = `${auth.id}/${data.id}/${crypto.randomUUID()}-${safeName}`;
@@ -822,7 +836,7 @@ function App() {
       setToast('Record saved. Sending profile invitation…');
       if (data.email) await sendProfileInvitation(data.role, data.id);
       else setToast('Record saved. Add an email address to send a profile invitation.');
-    } else setToast(page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties account.');
+    } else setToast(renewalEndDate ? `Renewal recorded. The lease now ends ${dateLabel(renewalEndDate)}.` : page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties account.');
   }
 
   async function deleteProperty(property, confirmed = false) {
@@ -938,13 +952,13 @@ function App() {
     if (kind === 'charge') {
       const status = form.get('status');
       const tenant = tenants.find((item) => item.id === form.get('tenant_id'));
-      const isRenewalRent = editingPerson.category === 'rent' && String(editingPerson.description || '').startsWith('Renewal rent · ');
-      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status: isRenewalRent ? editingPerson.status : status, edited_at: new Date().toISOString(), edited_by: auth.id };
+      const isRenewalRent = editingPerson.category === 'rent' && String(editingPerson.description || '').toLowerCase().startsWith('renewal rent');
+      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status: isRenewalRent ? editingPerson.status : status, lease_extension_months: isRenewalRent && form.get('lease_extension_months') ? Number(form.get('lease_extension_months')) : null, edited_at: new Date().toISOString(), edited_by: auth.id };
       setSaving(true);
       const { data: savedRow, error: saveError } = await supabase.from('service_charges').update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
       let data = savedRow, error = saveError;
       if (!error && isRenewalRent && status !== editingPerson.status && ['paid', 'unpaid'].includes(status)) {
-        const result = await supabase.rpc('set_rent_payment_status', { p_charge_id: editingPerson.id, p_status: status, p_paid_at: status === 'paid' ? (form.get('paid_at') || localDateISO()) : null, p_reason: null });
+        const result = await supabase.rpc('set_rent_payment_status', { p_charge_id: editingPerson.id, p_status: status, p_paid_at: status === 'paid' ? (form.get('paid_at') || localDateISO()) : null, p_reason: null, p_duration_months: row.lease_extension_months });
         data = result.data; error = result.error;
       }
       setSaving(false);
@@ -989,9 +1003,9 @@ function App() {
     setTransactionActionId(record.id);
     let data, error;
     try {
-      const isRenewalRent = record.category === 'rent' && String(record.description || '').startsWith('Renewal rent · ');
+      const isRenewalRent = record.category === 'rent' && String(record.description || '').toLowerCase().startsWith('renewal rent');
       if (isRenewalRent) {
-        ({ data, error } = await supabase.rpc('set_rent_payment_status', { p_charge_id: record.id, p_status: 'voided', p_paid_at: null, p_reason: reason.trim() }));
+        ({ data, error } = await supabase.rpc('set_rent_payment_status', { p_charge_id: record.id, p_status: 'voided', p_paid_at: null, p_reason: reason.trim(), p_duration_months: record.lease_extension_months || null }));
         if (!error) {
           const { data: updatedTenants } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
           if (updatedTenants) setTenants(updatedTenants);
@@ -1021,9 +1035,9 @@ function App() {
     setTransactionActionId(record.id);
     let data, error, renewalEndDate = null;
     try {
-      const isRenewalRent = record.category === 'rent' && String(record.description || '').startsWith('Renewal rent · ');
+      const isRenewalRent = record.category === 'rent' && String(record.description || '').toLowerCase().startsWith('renewal rent');
       if (isRenewalRent) {
-        ({ data, error } = await supabase.rpc('set_rent_payment_status', { p_charge_id: record.id, p_status: status, p_paid_at: status === 'paid' ? localDateISO() : null, p_reason: null }));
+        ({ data, error } = await supabase.rpc('set_rent_payment_status', { p_charge_id: record.id, p_status: status, p_paid_at: status === 'paid' ? localDateISO() : null, p_reason: null, p_duration_months: record.lease_extension_months || null }));
         if (!error) {
           const { data: updatedTenants, error: tenantError } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
           if (tenantError) console.warn('Lease updated; tenant list will refresh on reload.', tenantError.message);
@@ -1204,6 +1218,7 @@ function App() {
         <div className="form-section-title">Charge details</div>
         <label>What is this payment for?<input required name="description" placeholder="e.g. November rent or generator servicing"/></label>
         <div className="form-row"><label>Tenant<select name="tenant_id" defaultValue=""><option value="">Property / general charge</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name}</option>)}</select></label><label>Category<select name="category"><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="utilities">Utilities</option><option value="maintenance">Maintenance</option><option value="security">Security</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></label></div>
+        <label>Renewal duration <small>(only used when the description starts with “Renewal rent”)</small><select name="lease_extension_months" defaultValue=""><option value="">Use the original agreement term</option><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="9">9 months</option><option value="12">12 months</option><option value="18">18 months</option><option value="24">24 months</option></select><small>The new end date is calculated from the tenant’s current lease end date.</small></label>
         <div className="form-row"><label>Amount (₦)<input required name="amount" type="number" min="0" step="0.01"/><small>Enter the amount for this one rent period or charge.</small></label><label>Record status<select name="status"><option value="paid">Paid in full</option><option value="unpaid">Unpaid / due</option><option value="waived">Waived</option></select></label></div>
         <div className="form-section-title">Dates and receipt</div>
         <p className="payment-entry-help">Use the due date for when payment is expected and the paid date for when money was actually received. Leave paid date blank for an unpaid item.</p>
@@ -2078,11 +2093,13 @@ function EditPersonModal({ person, saving, onSave, onClose }) {
 }
 
 function TransactionEditModal({ transaction, tenants, saving, onSave, onClose }) {
+  const isRenewalRent = transaction.category === 'rent' && String(transaction.description || '').toLowerCase().startsWith('renewal rent');
   return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="modal" onSubmit={onSave}>
     <div className="modal-heading"><div><span className="eyebrow">PAYMENTS &amp; CHARGES</span><h2>Edit transaction</h2><p>Update the record. Voided transactions remain in the audit history.</p></div><button type="button" className="icon-button" onClick={onClose}><X size={19}/></button></div>
     <label>Description<input required name="description" defaultValue={transaction.description}/></label>
     <div className="form-row"><label>Tenant<select name="tenant_id" defaultValue={transaction.tenant_id || ''}><option value="">Property / general charge</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name}</option>)}</select></label><label>Category<select name="category" defaultValue={transaction.category || 'other'}><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="utilities">Utilities</option><option value="maintenance">Maintenance</option><option value="security">Security</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></label></div>
     <label>Amount (₦)<input required name="amount" type="number" min="0" step="0.01" defaultValue={transaction.amount}/></label>
+    {isRenewalRent && <label>Renewal duration<select name="lease_extension_months" defaultValue={transaction.lease_extension_months || ''}><option value="">Use the original agreement term</option><option value="1">1 month</option><option value="3">3 months</option><option value="6">6 months</option><option value="9">9 months</option><option value="12">12 months</option><option value="18">18 months</option><option value="24">24 months</option></select><small>The lease end date is extended from its current value when this renewal is recorded as paid.</small></label>}
     <div className="form-row"><label>Status<select name="status" defaultValue={transaction.status}><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="waived">Waived</option></select></label><label>Due date<input name="due_date" type="date" defaultValue={transaction.due_date || ''}/></label></div>
     <label>Paid date<input name="paid_at" type="date" defaultValue={transaction.paid_at || ''}/></label>
     <div className="modal-footer"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button></div>

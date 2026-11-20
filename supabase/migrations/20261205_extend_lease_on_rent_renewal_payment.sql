@@ -33,13 +33,15 @@ for each row execute function public.capture_original_lease_term();
 alter table public.service_charges
   add column if not exists lease_extension_applied_at timestamptz,
   add column if not exists lease_end_before_extension date,
-  add column if not exists lease_end_after_extension date;
+  add column if not exists lease_end_after_extension date,
+  add column if not exists lease_extension_months integer;
 
 create or replace function public.set_rent_payment_status(
   p_charge_id uuid,
   p_status text,
   p_paid_at date default current_date,
-  p_reason text default null
+  p_reason text default null,
+  p_duration_months integer default null
 )
 returns public.service_charges
 language plpgsql
@@ -69,6 +71,7 @@ begin
   if p_status = 'paid' then
     update public.service_charges
     set status = 'paid', paid_at = coalesce(p_paid_at, current_date),
+        lease_extension_months = coalesce(p_duration_months, lease_extension_months),
         edited_at = now(), edited_by = auth.uid()
     where id = p_charge_id and owner_id = auth.uid()
     returning * into v_charge;
@@ -88,7 +91,14 @@ begin
 
       -- age(original end + 1 day, original start) preserves calendar terms
       -- such as 1 Nov through 31 Oct as exactly one year.
-      v_term := age(v_tenant.original_lease_end + 1, v_tenant.original_lease_start);
+      if v_charge.lease_extension_months is not null then
+        if v_charge.lease_extension_months < 1 or v_charge.lease_extension_months > 120 then
+          raise exception 'Renewal duration must be between 1 and 120 months.';
+        end if;
+        v_term := make_interval(months => v_charge.lease_extension_months);
+      else
+        v_term := age(v_tenant.original_lease_end + 1, v_tenant.original_lease_start);
+      end if;
       if v_term <= interval '0' then raise exception 'The original agreement term must be greater than zero.'; end if;
       v_new_end := (v_tenant.lease_end + v_term)::date;
 
@@ -151,5 +161,5 @@ begin
 end;
 $$;
 
-revoke all on function public.set_rent_payment_status(uuid, text, date, text) from public, anon;
-grant execute on function public.set_rent_payment_status(uuid, text, date, text) to authenticated;
+revoke all on function public.set_rent_payment_status(uuid, text, date, text, integer) from public, anon;
+grant execute on function public.set_rent_payment_status(uuid, text, date, text, integer) to authenticated;
