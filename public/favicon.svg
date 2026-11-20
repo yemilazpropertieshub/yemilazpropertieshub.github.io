@@ -1,3 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="235 95 790 790" role="img" aria-label="Yemilaz Properties">
-  <image href="/yemilaz-properties-logo.png" x="0" y="0" width="1280" height="1280" preserveAspectRatio="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Yemilaz Properties">
+  <rect width="64" height="64" rx="14" fill="#e8f0ed"/>
+  <circle cx="40" cy="12" r="4" fill="#c9a85f"/>
+  <path d="M10 52h44" fill="none" stroke="#075b51" stroke-width="4" stroke-linecap="round"/>
+  <path d="M14 48V27L36 13v13L24 35v13" fill="none" stroke="#075b51" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m29 48 0-13 11-7 12 8v12" fill="none" stroke="#163844" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

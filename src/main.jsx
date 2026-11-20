@@ -18,7 +18,7 @@ const initials = (name = '') => name.split(' ').map((part) => part[0]).slice(0, 
 const brandName = (value = 'Yemilaz Properties') => String(value).trim() || 'Yemilaz Properties';
 
 function BrandSymbol({ className = '' }) {
-  return <img className={className} src="/yemilaz-mark.svg?v=3" alt="" aria-hidden="true" draggable="false"/>;
+  return <img className={className} src="/yemilaz-mark.svg?v=4" alt="" aria-hidden="true" draggable="false"/>;
 }
 
 function BrandLockup({ name, className = '' }) {
