@@ -262,6 +262,12 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .signup-account-option>b{font-size:12px;line-height:1.3}
 .signup-account-option>small{font-size:11px;line-height:1.45;color:#62747b}
 .signup-account-option>em{margin-top:auto;font-size:9px;line-height:1.35;font-style:normal;font-weight:700;color:#92733f}
+.signup-account-types{grid-template-columns:repeat(4,minmax(0,1fr))}
+.auth-dialog-role-picker{width:min(960px,96vw)}
+.signup-selected-role{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 12px;border:1px solid #dce8e2;border-radius:8px;background:#f7faf8}
+.signup-selected-role>span{color:#8b9991;font-size:8px;font-weight:750;letter-spacing:1.1px}
+.signup-selected-role>b{color:#17584f;font-size:11px}
+.signup-selected-role>.auth-toggle{margin-left:auto}
 .auth-dialog-signup>.setup-note{font-size:11px;line-height:1.6}
 @media(max-width:650px){.auth-dialog-signup{padding:18px}.signup-account-types{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.signup-account-option{min-height:145px;padding:11px 10px}.signup-account-option.selected{padding:10px 9px}.signup-account-option>b{font-size:11px}.signup-account-option>small{font-size:10px}}
 @media(max-width:390px){.signup-account-types{grid-template-columns:1fr}.signup-account-option{min-height:auto}.signup-account-option>em{margin-top:0}}
