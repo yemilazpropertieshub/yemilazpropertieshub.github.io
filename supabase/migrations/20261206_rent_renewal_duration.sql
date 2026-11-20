@@ -46,6 +46,7 @@ declare
   v_tenant public.tenants%rowtype;
   v_term interval;
   v_new_end date;
+  v_previous_months integer;
 begin
   if auth.uid() is null or p_status not in ('paid', 'unpaid', 'voided') then
     raise exception 'A signed-in property manager and a valid payment status are required.';
@@ -62,16 +63,16 @@ begin
   if v_charge.status = 'voided' then raise exception 'A voided payment cannot be changed.'; end if;
 
   if p_status = 'paid' then
+    v_previous_months := v_charge.lease_extension_months;
     update public.service_charges
     set status = 'paid', paid_at = coalesce(p_paid_at, current_date),
-        lease_extension_months = coalesce(p_duration_months, lease_extension_months),
+        lease_extension_months = p_duration_months,
         edited_at = now(), edited_by = auth.uid()
     where id = p_charge_id and owner_id = auth.uid()
     returning * into v_charge;
 
-    if v_charge.category = 'rent'
-       and lower(v_charge.description) like 'renewal rent%'
-       and v_charge.lease_extension_applied_at is null then
+    if v_charge.category = 'rent' and lower(v_charge.description) like 'renewal rent%'
+       and (v_charge.lease_extension_applied_at is null or p_duration_months is distinct from v_previous_months) then
       select * into v_tenant
       from public.tenants
       where id = v_charge.tenant_id and owner_id = auth.uid()
@@ -82,23 +83,31 @@ begin
         raise exception 'This renewal cannot extend the tenancy because the original agreement dates are missing.';
       end if;
 
-      if v_charge.lease_extension_months is not null then
-        if v_charge.lease_extension_months < 1 or v_charge.lease_extension_months > 120 then
+      if p_duration_months is not null then
+        if p_duration_months < 1 or p_duration_months > 120 then
           raise exception 'Renewal duration must be between 1 and 120 months.';
         end if;
-        v_term := make_interval(months => v_charge.lease_extension_months);
+        v_term := make_interval(months => p_duration_months);
       else
         v_term := age(v_tenant.original_lease_end + 1, v_tenant.original_lease_start);
       end if;
       if v_term <= interval '0' then raise exception 'The original agreement term must be greater than zero.'; end if;
-      v_new_end := (v_tenant.lease_end + v_term)::date;
+      if v_charge.lease_extension_applied_at is null then
+        v_new_end := (v_tenant.lease_end + v_term)::date;
+        update public.service_charges
+        set lease_extension_applied_at = now(), lease_end_before_extension = v_tenant.lease_end
+        where id = p_charge_id and owner_id = auth.uid();
+      else
+        if v_tenant.lease_end is distinct from v_charge.lease_end_after_extension then
+          raise exception 'A later lease change exists. Review the tenancy dates before changing the paid renewal duration.';
+        end if;
+        v_new_end := (v_charge.lease_end_before_extension + v_term)::date;
+      end if;
 
       update public.tenants set lease_end = v_new_end
       where id = v_tenant.id and owner_id = auth.uid();
       update public.service_charges
-      set lease_extension_applied_at = now(),
-          lease_end_before_extension = v_tenant.lease_end,
-          lease_end_after_extension = v_new_end
+      set lease_end_after_extension = v_new_end
       where id = p_charge_id and owner_id = auth.uid()
       returning * into v_charge;
     end if;

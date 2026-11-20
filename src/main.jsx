@@ -953,19 +953,22 @@ function App() {
       const status = form.get('status');
       const tenant = tenants.find((item) => item.id === form.get('tenant_id'));
       const isRenewalRent = editingPerson.category === 'rent' && String(editingPerson.description || '').toLowerCase().startsWith('renewal rent');
-      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status: isRenewalRent ? editingPerson.status : status, lease_extension_months: isRenewalRent && form.get('lease_extension_months') ? Number(form.get('lease_extension_months')) : null, edited_at: new Date().toISOString(), edited_by: auth.id };
+      const requestedMonths = isRenewalRent && form.get('lease_extension_months') ? Number(form.get('lease_extension_months')) : null;
+      const durationChanged = requestedMonths !== (editingPerson.lease_extension_months || null);
+      const shouldSyncRenewal = isRenewalRent && ['paid', 'unpaid'].includes(status) && (status !== editingPerson.status || (status === 'paid' && durationChanged));
+      const row = { tenant_id: tenant?.id || null, property_id: tenant?.property_id || editingPerson.property_id || null, description: form.get('description'), category: form.get('category'), amount: Number(form.get('amount')), due_date: form.get('due_date') || null, paid_at: isRenewalRent ? editingPerson.paid_at : status === 'paid' ? (form.get('paid_at') || new Date().toISOString().slice(0, 10)) : null, status: isRenewalRent ? editingPerson.status : status, lease_extension_months: isRenewalRent && status === 'paid' ? editingPerson.lease_extension_months : requestedMonths, edited_at: new Date().toISOString(), edited_by: auth.id };
       setSaving(true);
       const { data: savedRow, error: saveError } = await supabase.from('service_charges').update(row).eq('owner_id', auth.id).eq('id', editingPerson.id).select().single();
       let data = savedRow, error = saveError;
-      if (!error && isRenewalRent && status !== editingPerson.status && ['paid', 'unpaid'].includes(status)) {
-        const result = await supabase.rpc('set_rent_payment_status', { p_charge_id: editingPerson.id, p_status: status, p_paid_at: status === 'paid' ? (form.get('paid_at') || localDateISO()) : null, p_reason: null, p_duration_months: row.lease_extension_months });
+      if (!error && shouldSyncRenewal) {
+        const result = await supabase.rpc('set_rent_payment_status', { p_charge_id: editingPerson.id, p_status: status, p_paid_at: status === 'paid' ? (form.get('paid_at') || localDateISO()) : null, p_reason: null, p_duration_months: requestedMonths });
         data = result.data; error = result.error;
       }
       setSaving(false);
       if (error) { setToast(error.message); return; }
       setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
       let renewedLeaseEnd = null;
-      if (isRenewalRent && status !== editingPerson.status) {
+      if (isRenewalRent && shouldSyncRenewal) {
         const { data: updatedTenants } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
         if (updatedTenants) {
           setTenants(updatedTenants);
