@@ -69,7 +69,7 @@ The third migration enables up to five public listing photos per property in the
 
 The fourth migration adds country and state/province fields to property listings. Nigeria and Lagos are selected by default. Country and first-level administrative-area dropdown options are loaded from the CountriesNow dataset; if its service is unavailable, the fields remain editable so listings can still be entered.
 
-The fifth migration adds a per-landlord business name, logo mark, and professional colour template. New landlords choose these while creating an account; existing landlords can change them under **Landlord profile**. The public Yemilaz homepage and favicon use the Horizon Homes mark. Each signed-in workspace displays the landlord’s own brand while retaining Yemilaz Properties as its hosting platform.
+Yemilaz Properties uses one official identity throughout the public website, sign-in screens, participant and staff portals, workspace, loading screens, and browser favicon. The transparent master logo is `public/yemilaz-properties-logo.png`; `public/yemilaz-mark.svg` crops its emblem for compact brand marks and the favicon. Property managers can still personalize workspace colours and their business name; the official Yemilaz logo remains consistent across pages.
 
 Listings support residential homes, shops and retail, offices, stores and warehouses, industrial/workshop spaces, hospitality and mixed-use buildings, residential/commercial plots, farms, parking, and event spaces. Owners can offer a property for rent/lease or sale. Optional size and suitable-use details work across property types; bedroom and bathroom counts are relevant only to residential listings. Rental prices can be shown per day, week, month, or year.
 

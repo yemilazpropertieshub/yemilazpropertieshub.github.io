@@ -17,27 +17,16 @@ const dateLabel = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateS
 const initials = (name = '') => name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase();
 const brandName = (value = 'Yemilaz Properties') => String(value).trim() || 'Yemilaz Properties';
 
-function BrandSymbol({ logo = 'horizon', className = '' }) {
-  return <svg className={className} viewBox="0 0 146 146" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="1" width="144" height="144" rx="30" fill="var(--brand-soft,#e8f0ed)" stroke="none"/>
-    {logo === 'estate' && <><path d="M22 66 73 24l51 42" stroke="var(--brand-accent,#d0ad63)"/><path d="m48 65 25 26 25-26M73 91v35" strokeWidth="9"/></>}
-    {logo === 'keystone' && <><path d="M20 126V72a53 53 0 0 1 106 0v54"/><path d="m49 68 24 25 24-25M73 93v33" stroke="var(--brand-accent,#d0ad63)" strokeWidth="7"/></>}
-    {logo === 'monogram' && <><circle cx="73" cy="73" r="57"/><text x="73" y="94" textAnchor="middle" fill="currentColor" stroke="none" fontFamily="Manrope,Arial,sans-serif" fontSize="48" fontWeight="700">YP</text><circle cx="119" cy="27" r="6" fill="var(--brand-accent,#d0ad63)" stroke="none"/></>}
-    {logo === 'horizon' && <><path d="M24 119h98M34 113V67l39-31 39 31v46" strokeWidth="7"/><path d="M51 113V76a22 22 0 0 1 44 0v37" stroke="var(--brand-accent,#d0ad63)" strokeWidth="6"/><path d="M73 36V20m-9 8h18" stroke="var(--brand-accent,#d0ad63)" strokeWidth="5"/><circle cx="73" cy="91" r="4" fill="currentColor" stroke="none"/></>}
-    {logo === 'doorway' && <><path d="M34 126V63a39 39 0 0 1 78 0v63" strokeWidth="10"/><path d="M52 126V65a21 21 0 0 1 42 0v61" stroke="var(--brand-accent,#d0ad63)"/><circle cx="84" cy="101" r="4" fill="currentColor" stroke="none"/></>}
-    {logo === 'keyline' && <><path d="M29 119h88M39 115V68l34-27 34 27v47"/><path d="M54 115V78h38v37" stroke="var(--brand-accent,#d0ad63)"/><circle cx="102" cy="36" r="14"/><path d="M102 50v19m0 0h11m-11 0v9" stroke="var(--brand-accent,#d0ad63)"/></>}
-    {logo === 'palm-estate' && <><path d="M23 119h100M35 115V76l38-31 38 31v39"/><path d="M73 45c-2-21 4-31 18-34-2 13-8 22-18 28m0 6C62 27 51 23 39 29c9 10 20 15 34 14m0 0c10-17 21-22 35-18-7 12-18 18-34 20" stroke="var(--brand-accent,#d0ad63)"/><path d="M56 115V82h34v33"/></>}
-    {logo === 'estate-columns' && <><path d="M24 120h98M32 111V61h24v50M61 111V40h24v71M90 111V69h24v42"/><path d="M27 55h34M56 34h34M85 63h34M43 72v28m30-49v49m29-35v35" stroke="var(--brand-accent,#d0ad63)"/><path d="m61 18 12-9 12 9"/></>}
-    {logo === 'diamond-yp' && <><path d="m73 12 61 61-61 61L12 73 73 12Z"/><path d="M44 103V44h16l27 37V44m15 59V44H85" stroke="var(--brand-accent,#d0ad63)" strokeWidth="8"/><circle cx="117" cy="29" r="5" fill="var(--brand-accent,#d0ad63)" stroke="none"/></>}
-  </svg>;
+function BrandSymbol({ className = '' }) {
+  return <img className={className} src="/yemilaz-mark.svg" alt="" aria-hidden="true" draggable="false"/>;
 }
 
-function BrandLockup({ name, logo = 'horizon', className = '' }) {
-  return <div className={`brand-lockup ${className}`}><BrandSymbol logo={logo}/><span><b>{brandName(name)}</b><small>PROPERTY MANAGEMENT</small></span></div>;
+function BrandLockup({ name, className = '' }) {
+  return <div className={`brand-lockup ${className}`}><BrandSymbol/><span><b>{brandName(name)}</b><small>PROPERTY MANAGEMENT</small></span></div>;
 }
 
-function BrandWatermark({ logo = 'horizon' }) {
-  return <div className="brand-watermark" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <BrandSymbol key={index} logo={logo}/>)}</div>;
+function BrandWatermark() {
+  return <div className="brand-watermark" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <BrandSymbol key={index}/>)}</div>;
 }
 
 function ScrollNavigation() {
@@ -76,12 +65,10 @@ function AuthLoadingScreen({ onContinue }) {
 function BrandingFields({ profile, defaultBusinessName = 'Yemilaz Properties' }) {
   const [name, setName] = useState(profile?.business_name ?? defaultBusinessName);
   const [template, setTemplate] = useState(profile?.brand_template || 'jade');
-  const [logo, setLogo] = useState(profile?.brand_logo || 'horizon');
   return <><div className="form-section-title">Your website identity</div>
     <label>Business / website name<input required name="business_name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Adeola Homes"/></label>
-    <div className="form-row"><label>Professional colour template<select name="brand_template" value={template} onChange={(event) => setTemplate(event.target.value)}><option value="jade">Jade &amp; brass</option><option value="midnight">Midnight coast</option><option value="terracotta">Heritage clay</option><option value="plum">Orchid &amp; slate</option></select></label>
-      <label>Choose a logo mark<select name="brand_logo" value={logo} onChange={(event) => setLogo(event.target.value)}><option value="horizon">Horizon homes</option><option value="estate">Estate monogram</option><option value="keystone">Keystone arch</option><option value="monogram">YP monogram</option><option value="doorway">Open doorway</option><option value="keyline">Keyline residence</option><option value="palm-estate">Palm estate</option><option value="estate-columns">Estate columns</option><option value="diamond-yp">Diamond YP</option></select></label></div>
-    <div className={`brand-preview theme-${template}`}><BrandLockup name={name || 'Your property brand'} logo={logo}/><span>Shared platform · Yemilaz Properties</span></div>
+    <label>Professional colour template<select name="brand_template" value={template} onChange={(event) => setTemplate(event.target.value)}><option value="jade">Jade &amp; brass</option><option value="midnight">Midnight coast</option><option value="terracotta">Heritage clay</option><option value="plum">Orchid &amp; slate</option></select></label>
+    <div className={`brand-preview theme-${template}`}><BrandLockup name={name || 'Your property brand'}/><span>Official Yemilaz Properties brand mark</span></div>
   </>;
 }
 
