@@ -950,7 +950,7 @@ function App() {
   }
 
   async function voidTransaction(record, confirmed = false, reason = '') {
-    if (!auth || !supabase || record.status === 'voided') return;
+    if (!auth || !supabase || record.status === 'voided') { setToast('This transaction could not be voided. Refresh the ledger and try again.'); return false; }
     if (!confirmed) {
       setToast('');
       setConfirmReason('');
@@ -959,11 +959,14 @@ function App() {
     }
     if (!reason.trim()) { setToast('Enter a reason to void this transaction.'); return; }
     setTransactionActionId(record.id);
-    const { data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single();
-    setTransactionActionId(null);
-    if (error) { setToast(error.message); return; }
+    let data, error;
+    try { ({ data, error } = await supabase.from('service_charges').update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: auth.id, void_reason: reason.trim() }).eq('owner_id', auth.id).eq('id', record.id).select().single()); }
+    catch (requestError) { setToast(`Could not void this transaction: ${requestError.message || 'Connection error. Please try again.'}`); return false; }
+    finally { setTransactionActionId(null); }
+    if (error) { setToast(`Could not void this transaction: ${error.message}`); return false; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
     setToast('Transaction voided. Its history has been kept.');
+    return true;
   }
 
   async function setTransactionPaid(record, status, confirmed = false) {
@@ -983,7 +986,7 @@ function App() {
   }
 
   async function deleteUnpaidTransaction(record, confirmed = false) {
-    if (!auth || !supabase || record.status !== 'unpaid') return;
+    if (!auth || !supabase || record.status !== 'unpaid') { setToast('Only unpaid charges can be deleted. Refresh the ledger and try again.'); return false; }
     if (!confirmed) {
       setToast('');
       setConfirmReason('');
@@ -991,13 +994,16 @@ function App() {
       return;
     }
     setTransactionActionId(record.id);
-    const { data, error } = await supabase.from('service_charges').delete().eq('owner_id', auth.id).eq('id', record.id).eq('status', 'unpaid').select('id').maybeSingle();
-    setTransactionActionId(null);
-    if (error) { setToast(error.message); return; }
-    if (!data) { setToast('This charge was not deleted. It may have changed; refresh the page and try again.'); return; }
+    let data, error;
+    try { ({ data, error } = await supabase.from('service_charges').delete().eq('owner_id', auth.id).eq('id', record.id).eq('status', 'unpaid').select('id').maybeSingle()); }
+    catch (requestError) { setToast(`Could not delete this charge: ${requestError.message || 'Connection error. Please try again.'}`); return false; }
+    finally { setTransactionActionId(null); }
+    if (error) { setToast(`Could not delete this charge: ${error.message}`); return false; }
+    if (!data) { setToast('This charge was not deleted. It may have changed or you may not have permission. Refresh the ledger and try again.'); return false; }
     setPaymentRecords((current) => current.filter((item) => item.id !== record.id));
     setRecords((current) => current.filter((item) => item.id !== record.id));
     setToast('Unpaid charge deleted. Paid and voided history remains protected.');
+    return true;
   }
 
   async function deletePerson(record, kind, confirmed = false) {
@@ -1032,6 +1038,10 @@ function App() {
     setConfirmBusy(true);
     try {
       await confirmDialog.onConfirm(confirmReason);
+      setConfirmDialog(null);
+      setConfirmReason('');
+    } catch (error) {
+      setToast(`The action could not be completed: ${error?.message || 'Please try again.'}`);
       setConfirmDialog(null);
       setConfirmReason('');
     } finally {
