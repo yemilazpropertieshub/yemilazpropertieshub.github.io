@@ -542,3 +542,43 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .tenant-workspace .status-pill{text-transform:capitalize}
 @media(max-width:700px){.tenant-workspace{padding:24px 16px 76px}.tenant-workspace .tenant-profile-card{padding:23px 20px}.tenant-workspace .tenant-profile-section{padding:19px}.tenant-workspace .tenant-profile-grid{gap:12px}}
 @media(max-width:570px){.tenant-workspace .tenant-profile-card h1{font-size:24px}.tenant-workspace .tenant-profile-card .welcome-actions{width:100%;justify-content:flex-start}.tenant-workspace .tenant-profile-card .welcome-actions button{flex:1 1 100%;justify-content:center}.tenant-workspace .tenant-summary-card{min-height:unset}.tenant-workspace .tenant-profile-facts{gap:15px}.tenant-workspace .tenant-profile-section .table-wrap{overflow-x:auto}}
+
+/* Refined presentation for assigned agent, caretaker, and lawyer portals. */
+.staff-portal-shell{min-height:100vh;background:#f3f7f5;color:#1b3036;font-family:'DM Sans',Manrope,Arial,sans-serif}
+.staff-portal-shell .portal-header{border-color:#e1e9e5;background:#ffffffed;box-shadow:0 5px 20px #153b3209}
+.staff-portal-shell .portal-role-chip{border-color:#dcebe5;background:#eaf3ef;color:#15574e}
+.staff-portal{max-width:1240px;padding:38px 28px 90px;display:grid;gap:18px}
+.staff-portal>.panel,.staff-portal .tenant-profile-section{border:1px solid #e2eae6;border-radius:16px;background:#fff;box-shadow:0 8px 24px #183b3008}
+.staff-portal .tenant-profile-card{min-height:164px;padding:30px 32px;border-left:4px solid #17665b;background:linear-gradient(115deg,#fff 0%,#f5faf7 100%)}
+.staff-portal .tenant-profile-card .eyebrow,.staff-portal .tenant-profile-section>.eyebrow,.staff-portal .tenant-profile-section .panel-heading .eyebrow{color:#8a7652;font-size:9px;letter-spacing:1.55px}
+.staff-portal .tenant-profile-card h1{margin:10px 0 8px;color:#172a31;font:700 clamp(25px,3vw,32px)/1.22 Manrope,Arial,sans-serif;letter-spacing:-.75px}
+.staff-portal .tenant-profile-card p,.staff-portal .tenant-profile-section p{color:#687871;font-size:12px;line-height:1.75}
+.staff-portal .tenant-profile-grid{gap:18px;margin:0}
+.staff-portal .tenant-profile-section{padding:24px}
+.staff-portal .tenant-profile-section h2{margin:9px 0 12px;color:#1a3037;font:650 18px/1.38 Manrope,Arial,sans-serif;letter-spacing:-.25px}
+.staff-portal .tenant-profile-facts{gap:24px;margin-top:18px;padding-top:15px;border-top:1px solid #edf1ee}
+.staff-portal .tenant-profile-facts span{gap:6px;color:#78857f;font-size:10px}
+.staff-portal .tenant-profile-facts b{color:#253a3e;font-size:12px;font-weight:700}
+.staff-portal .panel-heading{align-items:flex-end;gap:16px;margin-bottom:16px}
+.staff-portal .panel-heading h2{margin:7px 0 5px;font-size:20px;line-height:1.35}
+.staff-portal .panel-heading p{margin:0}
+.staff-portal .property-grid{gap:13px;margin-top:16px}
+.staff-portal .staff-property-card{min-height:145px;padding:19px;background:linear-gradient(145deg,#fff,#fbfdfc);box-shadow:none}
+.staff-portal .staff-property-card h2{margin:10px 0 7px;font-size:16px}
+.staff-portal .staff-property-card .eyebrow{font-size:8px}
+.staff-portal .table-wrap{border:1px solid #edf1ee;border-radius:10px}
+.staff-portal table{white-space:normal}
+.staff-portal th{height:40px;padding:0 12px;background:#f8faf9;color:#75827c;font-size:9px;letter-spacing:.75px}
+.staff-portal td{height:52px;padding:8px 12px;color:#465a5d;font-size:11px;line-height:1.5}
+.staff-portal .tenant-document-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid #edf1ee}
+.staff-portal .tenant-document-row:last-of-type{border-bottom:0}
+.staff-portal .tenant-document-row b{display:block;color:#243b40;font-size:12px}
+.staff-portal .tenant-document-row small{display:block;margin-top:5px;color:#7b8983;font-size:10px;text-transform:capitalize}
+.staff-portal .tenant-profile-section select,.staff-portal .tenant-profile-section textarea,.staff-portal .tenant-profile-section input:not([type=file]){border:1px solid #dfe8e3;border-radius:8px;background:#fbfdfc;color:#243a3e;font:inherit;font-size:12px}
+.staff-portal .tenant-profile-section select{min-height:38px;padding:7px 34px 7px 10px}
+.staff-portal .tenant-profile-section textarea{padding:11px 12px;line-height:1.65}
+.staff-portal .primary-button,.staff-portal .secondary-button{min-height:40px;border-radius:9px;font-size:11px}
+.staff-portal .upgrade-request-card{padding:24px}
+.staff-portal .upgrade-request-intro p{font-size:11px;line-height:1.7}
+@media(max-width:700px){.staff-portal{padding:24px 16px 78px;gap:13px}.staff-portal .tenant-profile-card{padding:23px 20px}.staff-portal .tenant-profile-section{padding:19px}.staff-portal .tenant-profile-grid{gap:12px}}
+@media(max-width:570px){.staff-portal .tenant-profile-card h1{font-size:24px}.staff-portal .tenant-profile-facts{gap:15px}.staff-portal .tenant-document-row{align-items:flex-start;flex-direction:column}.staff-portal .panel-heading{align-items:flex-start;flex-direction:column}.staff-portal .tenant-profile-section .table-wrap{overflow-x:auto}.staff-portal table{min-width:680px}}
