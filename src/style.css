@@ -499,3 +499,46 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .about-page-actions{display:flex;flex-wrap:wrap;gap:10px;padding-top:24px}
 .about-page-actions .primary-button,.about-page-actions .secondary-button{min-height:42px}
 @media(max-width:570px){.about-page article>h1{font-size:34px;letter-spacing:-1.2px}.about-page article>section{padding:18px 0}.about-page-actions{display:grid}.about-page-actions button{justify-content:center}}
+.tenant-workspace-shell{background:#f4f7f6;color:#192c32;font-family:'DM Sans',Manrope,Arial,sans-serif}
+.tenant-workspace-shell .portal-header{border-color:#e1e9e6;background:#ffffffed;box-shadow:0 5px 20px #153b3209}
+.tenant-workspace-shell .portal-role-chip{background:#eaf3ef;color:#15574e;border:1px solid #dcebe5}
+.tenant-workspace{max-width:1240px;padding:38px 28px 88px}
+.tenant-workspace .panel{border:1px solid #e2eae6;border-radius:16px;box-shadow:0 8px 24px #183b3008;background:#fff}
+.tenant-workspace .tenant-profile-card{min-height:166px;padding:30px 32px;border-left:4px solid #17665b;background:linear-gradient(115deg,#fff 0%,#f6faf8 100%)}
+.tenant-workspace .tenant-profile-card .eyebrow,.tenant-workspace .tenant-profile-section>.eyebrow,.tenant-workspace .tenant-profile-section .panel-heading .eyebrow{color:#8a7652;font-size:9px;letter-spacing:1.55px}
+.tenant-workspace .tenant-profile-card h1{margin:10px 0 7px;color:#172a31;font:700 clamp(24px,3vw,31px)/1.2 Manrope,Arial,sans-serif;letter-spacing:-.7px}
+.tenant-workspace .tenant-profile-card p{color:#65756f;font-size:13px;line-height:1.6}
+.tenant-workspace .tenant-profile-card .primary-button,.tenant-workspace .tenant-profile-card .secondary-button{min-height:44px;border-radius:9px;padding:0 15px;font-size:11px}
+.tenant-workspace .tenant-profile-grid{gap:18px;margin-bottom:20px}
+.tenant-workspace .tenant-profile-section{padding:24px}
+.tenant-workspace .tenant-profile-section h2{margin:9px 0 12px;color:#1a3037;font:650 18px/1.35 Manrope,Arial,sans-serif;letter-spacing:-.25px}
+.tenant-workspace .tenant-profile-section p{color:#687871;font-size:12px;line-height:1.7}
+.tenant-workspace .tenant-profile-facts{gap:24px;margin-top:19px;padding-top:15px;border-top:1px solid #edf1ee}
+.tenant-workspace .tenant-profile-facts span{gap:6px;color:#78857f;font-size:10px}
+.tenant-workspace .tenant-profile-facts b{color:#253a3e;font-size:11px;font-weight:650;text-transform:capitalize}
+.tenant-workspace .tenant-summary-grid{gap:16px;margin:0 0 20px}
+.tenant-workspace .tenant-summary-card{min-height:148px;padding:20px 21px;gap:8px}
+.tenant-workspace .tenant-summary-card>span{width:40px;height:40px;border-radius:12px;background:#eaf3ef;color:#17665b}
+.tenant-workspace .tenant-summary-card>b{color:#183139;font:700 25px/1.2 Manrope,Arial,sans-serif}
+.tenant-workspace .tenant-summary-card>strong{color:#31474a;font-size:12px}
+.tenant-workspace .tenant-summary-card>small{color:#75827d;font-size:10px;line-height:1.5}
+.tenant-workspace .tenant-profile-section .panel-heading{margin-bottom:14px}
+.tenant-workspace .tenant-profile-section .panel-heading h2{margin-bottom:5px}
+.tenant-workspace .tenant-profile-section .panel-heading p{max-width:850px;margin:0}
+.tenant-workspace .tenant-profile-section table{font-size:11px}
+.tenant-workspace .tenant-profile-section th{color:#73827c;letter-spacing:.7px}
+.tenant-workspace .tenant-profile-section td{color:#34464a}
+.tenant-workspace .tenant-profile-section select,.tenant-workspace .tenant-profile-section textarea,.tenant-workspace .tenant-profile-section input:not([type=file]){border:1px solid #dfe8e3;border-radius:8px;background:#fbfdfc;color:#243a3e;font:inherit;font-size:12px}
+.tenant-workspace .tenant-profile-section select{min-height:38px;padding:7px 34px 7px 10px}
+.tenant-workspace .tenant-profile-section textarea{padding:11px 12px;line-height:1.6}
+.tenant-workspace .message-thread{padding:16px 0;border-color:#e7eeea}
+.tenant-workspace .message-thread article{border:1px solid #e5ece8;border-radius:13px;padding:13px 15px}
+.tenant-workspace .message-thread .message-mine{background:#eaf4ef;border-color:#dceae3}
+.tenant-workspace .message-thread .message-theirs{background:#f7f9f8}
+.tenant-workspace .tenant-request-list{margin-top:18px}
+.tenant-workspace .tenant-request-list article{padding:17px;border-color:#e3ebe7;border-radius:12px;background:#fcfdfc}
+.tenant-workspace .tenant-request-list article>span{color:#536660;font-size:12px;line-height:1.6}
+.tenant-workspace .tenant-request-list small{font-size:10px;line-height:1.5}
+.tenant-workspace .status-pill{text-transform:capitalize}
+@media(max-width:700px){.tenant-workspace{padding:24px 16px 76px}.tenant-workspace .tenant-profile-card{padding:23px 20px}.tenant-workspace .tenant-profile-section{padding:19px}.tenant-workspace .tenant-profile-grid{gap:12px}}
+@media(max-width:570px){.tenant-workspace .tenant-profile-card h1{font-size:24px}.tenant-workspace .tenant-profile-card .welcome-actions{width:100%;justify-content:flex-start}.tenant-workspace .tenant-profile-card .welcome-actions button{flex:1 1 100%;justify-content:center}.tenant-workspace .tenant-summary-card{min-height:unset}.tenant-workspace .tenant-profile-facts{gap:15px}.tenant-workspace .tenant-profile-section .table-wrap{overflow-x:auto}}
