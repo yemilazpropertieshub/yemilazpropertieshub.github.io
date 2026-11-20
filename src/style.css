@@ -619,6 +619,8 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .caretaker-contact-actions{display:flex;gap:9px;white-space:nowrap}
 .caretaker-contact-actions a{color:#17665b;font-size:10px;font-weight:700;text-decoration:none}
 .caretaker-contact-actions a:hover{text-decoration:underline}
+.payment-row-actions{flex-wrap:wrap;min-width:245px}
+.payment-row-actions .compact-button{min-height:30px}
 .staff-portal .caretaker-tools .status-pill{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border:1px solid #e3eae6;border-radius:99px;background:#f5f8f6;color:#53655f;font-size:9px;text-transform:capitalize;white-space:nowrap}
 .staff-portal .caretaker-tools .status-pill.urgent{border-color:#f3d8cd;background:#fff3ef;color:#a4432b}
 @media(max-width:800px){.caretaker-two-column{grid-template-columns:1fr}}
