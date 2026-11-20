@@ -672,7 +672,10 @@ function App() {
     const name = String(form.get('full_name')).trim();
     const propertyId = String(form.get('property_id') || '') || null;
     const amount = Number(form.get('rent_amount'));
-    const firstPayment = Number(form.get('initial_payment') || 0);
+    const firstRentPayment = Number(form.get('initial_rent_payment') || 0);
+    const firstDepositPayment = Number(form.get('initial_deposit_payment') || 0);
+    const rentPaymentDate = String(form.get('rent_payment_date') || localDateISO());
+    const depositPaymentDate = String(form.get('deposit_payment_date') || localDateISO());
     const leaseStart = String(form.get('lease_start'));
     const leaseEnd = String(form.get('lease_end'));
     if (!String(form.get('email') || '').trim() || !String(form.get('guarantor_email') || '').trim()) {
@@ -681,13 +684,14 @@ function App() {
     if (!landlordProfile?.lawyer_email) { setToast('Add the lawyer’s email in Landlord profile before registering a tenant.'); return; }
     const hasSelectedCopyRecipient = [form.get('agent_id'), form.get('caretaker_id')].some((id) => staffRecords.some((person) => person.id === id && person.email));
     if (!hasSelectedCopyRecipient) { setToast('Select an agent or caretaker with an email address so they receive their own PDF copy.'); return; }
-    if (propertyId && firstPayment <= 0) { setToast('Record a rent or deposit payment before allocating this property.'); return; }
+    if (firstRentPayment < 0 || firstRentPayment > amount) { setToast('Enter no more than one rent period in Rent received. Record any deposit separately.'); return; }
+    if (propertyId && firstRentPayment + firstDepositPayment <= 0) { setToast('Record a rent or deposit payment before allocating this property.'); return; }
     setSaving(true);
     const { data: tenant, error } = await supabase.from('tenants').insert({
       owner_id: auth.id, full_name: name, email: form.get('email') || null, phone: form.get('phone') || null,
       property_id: null, lease_start: leaseStart, lease_end: leaseEnd, rent_amount: amount,
-      rent_frequency: form.get('rent_frequency'), deposit_amount: Number(form.get('deposit_amount') || 0),
-      first_rent_paid_at: form.get('payment_type') === 'rent' && firstPayment > 0 ? (form.get('payment_date') || new Date().toISOString().slice(0, 10)) : null,
+      rent_frequency: form.get('rent_frequency'), deposit_amount: firstDepositPayment,
+      first_rent_paid_at: firstRentPayment >= amount ? rentPaymentDate : null,
       agent_id: form.get('agent_id') || null, caretaker_id: form.get('caretaker_id') || null,
       status: 'active', notes: form.get('notes') || null,
     }).select().single();
@@ -700,14 +704,18 @@ function App() {
     });
     if (guarantorError) { if (tenant.first_rent_paid_at) await supabase.from('tenants').update({ first_rent_paid_at: null }).eq('owner_id', auth.id).eq('id', tenant.id); setSaving(false); setToast(`Tenant saved but guarantor details failed: ${guarantorError.message}`); setTenants((current) => [tenant, ...current]); return; }
     let nextPayments = paymentRecords;
-    if (firstPayment > 0) {
-      const { data: payment, error: paymentError } = await supabase.from('service_charges').insert({
-        owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `Initial ${form.get('payment_type')} payment — ${name}`,
-        category: form.get('payment_type'), amount: firstPayment, due_date: leaseStart,
-        paid_at: form.get('payment_date') || new Date().toISOString().slice(0, 10), status: 'paid',
-      }).select().single();
-      if (paymentError) { if (tenant.first_rent_paid_at) await supabase.from('tenants').update({ first_rent_paid_at: null }).eq('owner_id', auth.id).eq('id', tenant.id); setSaving(false); setToast(`Tenant saved, but payment could not be saved: ${paymentError.message}`); setTenants((current) => [tenant, ...current]); return; }
-      nextPayments = [payment, ...paymentRecords];
+    const initialPayments = [
+      ...(firstRentPayment > 0 ? [{ owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `Initial rent payment — ${name}`, category: 'rent', amount: firstRentPayment, due_date: leaseStart, paid_at: rentPaymentDate, status: 'paid' }] : []),
+      ...(firstDepositPayment > 0 ? [{ owner_id: auth.id, tenant_id: tenant.id, property_id: propertyId, description: `Initial deposit received — ${name}`, category: 'deposit', amount: firstDepositPayment, due_date: null, paid_at: depositPaymentDate, status: 'paid' }] : []),
+    ];
+    if (initialPayments.length) {
+      const { data: payments, error: paymentError } = await supabase.from('service_charges').insert(initialPayments).select();
+      if (paymentError) { if (tenant.first_rent_paid_at) await supabase.from('tenants').update({ first_rent_paid_at: null }).eq('owner_id', auth.id).eq('id', tenant.id); setSaving(false); setToast(`Tenant saved, but initial payment records could not be saved: ${paymentError.message}`); setTenants((current) => [tenant, ...current]); return; }
+      if (firstRentPayment > 0 && firstRentPayment < amount) {
+        const { error: balanceError } = await supabase.from('service_charges').update({ amount: amount - firstRentPayment }).eq('owner_id', auth.id).eq('tenant_id', tenant.id).eq('category', 'rent').eq('due_date', leaseStart).eq('status', 'unpaid').like('description', 'Scheduled rent · %');
+        if (balanceError) { setTenants((current) => [{ ...tenant, property_id: null }, ...current]); setPaymentRecords([...payments, ...paymentRecords]); setSaving(false); setToast(`Tenant and receipts were saved, but the remaining first-period rent balance could not be updated: ${balanceError.message}`); return; }
+      }
+      nextPayments = [...payments, ...paymentRecords];
       setPaymentRecords(nextPayments);
     }
     if (propertyId) {
@@ -1050,8 +1058,11 @@ function App() {
         <div className="form-row"><label>Tenant email<input required name="email" type="email"/></label><label>Tenant phone<input name="phone"/></label></div>
         <div className="form-row"><label>Lease start<input required name="lease_start" type="date"/></label><label>Lease end<input required name="lease_end" type="date"/></label></div>
         <div className="form-row"><label>Rent amount (₦)<input required name="rent_amount" type="number" min="0" step="0.01"/></label><label>Rent frequency<select name="rent_frequency"><option value="yearly">Yearly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option></select></label></div>
-        <div className="form-row"><label>First payment (₦)<input name="initial_payment" type="number" min="0" step="0.01" defaultValue="0"/><small>Enter a paid rent/deposit amount before allocating a property.</small></label><label>Payment type<select name="payment_type"><option value="rent">Rent</option><option value="deposit">Deposit</option></select></label></div>
-        <div className="form-row"><label>First payment date<input name="payment_date" type="date"/><small>Enter the actual date received; use an earlier date for existing tenancies.</small></label><label>Allocate available property<select name="property_id" defaultValue=""><option value="">Leave unallocated</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select><small>Allocation requires a first payment above zero.</small></label></div>
+        <div className="form-section-title">Move-in payment records</div>
+        <p className="payment-entry-help">Record rent and the refundable deposit separately. A deposit is kept in the ledger as a deposit and does not count as rent paid.</p>
+        <div className="payment-entry-group"><b>Rent received</b><div className="form-row"><label>Amount received (₦)<input name="initial_rent_payment" type="number" min="0" step="0.01" defaultValue="0"/><small>Enter up to one rent period. A full rent amount marks the first period as paid.</small></label><label>Date received<input name="rent_payment_date" type="date"/><small>For an existing tenant, enter the actual historical receipt date.</small></label></div></div>
+        <div className="payment-entry-group"><b>Deposit received</b><div className="form-row"><label>Amount received (₦)<input name="initial_deposit_payment" type="number" min="0" step="0.01" defaultValue="0"/><small>Keep this separate from rent; it will not create rent credit.</small></label><label>Date received<input name="deposit_payment_date" type="date"/><small>Use the actual date the deposit was received.</small></label></div></div>
+        <div className="form-row"><label>Allocate available property<select name="property_id" defaultValue=""><option value="">Leave unallocated</option>{availableProperties.map((property) => <option key={property.id} value={property.id}>{property.name} · {currency(property.price)}</option>)}</select><small>Allocation requires a recorded rent or deposit receipt above zero.</small></label></div>
         <div className="form-section-title">Guarantor details · required for their copy</div>
         <label>Guarantor’s full name<input required name="guarantor_name"/></label>
         <div className="form-row"><label>Guarantor email<input required name="guarantor_email" type="email"/></label><label>Guarantor phone<input name="guarantor_phone"/></label></div>
@@ -1072,10 +1083,13 @@ function App() {
         <label>Property photos<input name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple/><small>Upload up to 5 JPG, PNG or WebP photos, maximum 5 MB each. Use clear, current photos and avoid personal or identifying information.</small></label><label>Amenities<input name="amenities" placeholder="Parking, generator, security, garden"/><small>Separate amenities with commas.</small></label><label>Description<textarea name="description" rows="3"/></label>
         <label className="checkbox-row"><input type="checkbox" name="is_advertised" defaultChecked/> Advertise on the dashboard while available</label>
       </> : page === 'Payments & charges' ? <>
-        <label>Payment / charge description<input required name="description" placeholder="e.g. January rent or generator servicing"/></label>
+        <div className="form-section-title">Charge details</div>
+        <label>What is this payment for?<input required name="description" placeholder="e.g. November rent or generator servicing"/></label>
         <div className="form-row"><label>Tenant<select name="tenant_id" defaultValue=""><option value="">Property / general charge</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name}</option>)}</select></label><label>Category<select name="category"><option value="rent">Rent</option><option value="deposit">Deposit</option><option value="utilities">Utilities</option><option value="maintenance">Maintenance</option><option value="security">Security</option><option value="cleaning">Cleaning</option><option value="other">Other</option></select></label></div>
-        <div className="form-row"><label>Amount (₦)<input required name="amount" type="number" min="0" step="0.01"/></label><label>Status<select name="status"><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="waived">Waived</option></select></label></div>
-        <div className="form-row"><label>Due date<input name="due_date" type="date"/></label><label>Paid date<input name="paid_at" type="date"/></label></div><label>Payment evidence <small>(optional, private; up to 10 MB)</small><input name="evidence" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"/></label>
+        <div className="form-row"><label>Amount (₦)<input required name="amount" type="number" min="0" step="0.01"/><small>Enter the amount for this one rent period or charge.</small></label><label>Record status<select name="status"><option value="paid">Paid in full</option><option value="unpaid">Unpaid / due</option><option value="waived">Waived</option></select></label></div>
+        <div className="form-section-title">Dates and receipt</div>
+        <p className="payment-entry-help">Use the due date for when payment is expected and the paid date for when money was actually received. Leave paid date blank for an unpaid item.</p>
+        <div className="form-row"><label>Due date<input name="due_date" type="date"/></label><label>Paid date<input name="paid_at" type="date"/></label></div><label>Receipt or payment evidence <small>(optional, private; up to 10 MB)</small><input name="evidence" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"/></label>
       </> : page === 'Guarantors' ? <>
         <label>Guarantor’s full name<input required name="full_name"/></label><div className="form-row"><label>Phone<input name="phone"/></label><label>Email<input name="email" type="email"/></label></div><div className="form-row"><label>Relationship to tenant<input name="relationship"/></label><label>Occupation<input name="occupation"/></label></div><label>Address<input name="address"/></label>
       </> : <>
