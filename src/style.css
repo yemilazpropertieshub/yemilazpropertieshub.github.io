@@ -651,6 +651,28 @@ body,.public-site{background:#f5f7f5;color:#102b35}
   .confirm-backdrop{align-items:flex-start;overflow-y:auto;overscroll-behavior:contain}
   .confirm-dialog{max-height:calc(100dvh - 32px);overflow-y:auto;margin:auto 0}
 }
+
+.profile-standing-card{padding:24px;margin:18px 0;border:1px solid #dce8e3;background:linear-gradient(135deg,#fff 0%,#f7faf8 100%)}
+.profile-standing-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.profile-standing-head h2{margin:5px 0 6px;color:#153d39;font-size:22px}
+.profile-standing-head p{margin:0;color:#6e7d79;max-width:660px;line-height:1.6}
+.standing-score{min-width:130px;text-align:right;color:#175b52}
+.standing-score>b{font-size:34px;line-height:1}.standing-score>span{font-size:13px;color:#82908b}.standing-score>strong{display:block;margin-top:6px;font-size:12px}
+.standing-meter{height:10px;border-radius:99px;background:#e5ece8;overflow:hidden;margin:22px 0 12px}
+.standing-meter span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#b7a064,#177064);transition:width .35s ease}
+.standing-level-map{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:18px}
+.standing-level-map span{display:flex;align-items:center;gap:7px;color:#8a9692;font-size:11px}
+.standing-level-map i{display:grid;place-items:center;width:22px;height:22px;border:1px solid #dce5e0;border-radius:50%;font-style:normal;font-size:10px}
+.standing-level-map .reached{color:#176056;font-weight:700}.standing-level-map .reached i{color:#fff;background:#176056;border-color:#176056}
+.standing-factors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.standing-factors span{display:flex;justify-content:space-between;gap:8px;padding:12px 14px;border:1px solid #e4ebe7;border-radius:10px;background:#fff;color:#687772;font-size:12px}
+.standing-factors b{color:#183e39;text-align:right}
+.standing-fairness-note{font-size:11px;color:#75827d;line-height:1.6;margin:14px 0 0}
+.standing-history{margin-top:14px;border-top:1px solid #e4ebe7;padding-top:12px;color:#31514b;font-size:12px}
+.standing-history summary{cursor:pointer;font-weight:700}.standing-history p{margin:10px 0;color:#61716b}.standing-history small{display:block;margin-top:3px;color:#89948f}
+.standing-admin-guidance{display:flex;align-items:flex-start;gap:14px;padding:18px 20px;margin-bottom:18px;background:#f4f8f5;color:#22564c}.standing-admin-guidance p{margin:0;line-height:1.55;font-size:13px}
+.standing-adjustment-form{max-width:900px;margin-top:18px}
+@media(max-width:640px){.profile-standing-card{padding:17px;margin:14px 0}.profile-standing-head{gap:10px}.profile-standing-head h2{font-size:19px}.profile-standing-head p{font-size:12px}.standing-score{min-width:90px}.standing-score>b{font-size:27px}.standing-score>strong{font-size:10px}.standing-level-map{gap:3px}.standing-level-map span{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:9px;text-align:center}.standing-factors{grid-template-columns:1fr}.standing-factors span{font-size:11px}.standing-admin-guidance{padding:14px}}
 @media(max-width:390px){
   .portal-header-identity .brand-lockup b{font-size:12px}
   .portal-role-chip{max-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

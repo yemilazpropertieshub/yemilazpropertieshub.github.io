@@ -198,14 +198,8 @@ app.post('/api/tenant-packets', async (req, res) => {
       { role: 'caretaker', name: caretaker?.full_name, email: caretaker?.email },
     ].filter((recipient) => recipient.role === 'landlord' || recipient.role === 'tenant' || (recipient.role === 'guarantor' && guarantor) || (recipient.role === 'lawyer' && (landlord.lawyer_name || landlord.lawyer_email)) || (recipient.role === 'agent' && agent) || (recipient.role === 'caretaker' && caretaker));
     const recipients = allRecipients.filter((recipient) => recipient.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email));
-    if (!isDownload && (!recipients.some((recipient) => recipient.role === 'tenant') || !recipients.some((recipient) => recipient.role === 'guarantor'))) {
-      return res.status(422).json({ error: 'Tenant and guarantor email addresses are needed before sending the packet.' });
-    }
-    if (!isDownload && !recipients.some((recipient) => recipient.role === 'lawyer')) {
-      return res.status(422).json({ error: 'Add a lawyer email in the landlord profile before sending the packet.' });
-    }
-    if (!isDownload && !recipients.some((recipient) => ['agent', 'caretaker'].includes(recipient.role))) {
-      return res.status(422).json({ error: 'Assign an agent or caretaker with an email to receive a copy.' });
+    if (!isDownload && !recipients.some((recipient) => recipient.role === 'tenant')) {
+      return res.status(422).json({ error: 'Add a valid tenant email address before emailing tenancy documents.' });
     }
 
     const tenantSlug = safeName(tenant.full_name);
