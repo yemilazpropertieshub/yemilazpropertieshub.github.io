@@ -486,6 +486,43 @@ function App() {
     } finally { setSendingTenant(null); }
   }
 
+  async function sendRecordDocument(event) {
+    if (!import.meta.env.VITE_DOCUMENT_API_URL || !supabase) return { ok: false, error: 'PDF email service is not configured.' };
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { ok: false, error: 'Your sign-in session has expired.' };
+      const response = await fetch(`${import.meta.env.VITE_DOCUMENT_API_URL.replace(/\/$/, '')}/api/record-document`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ event }),
+      });
+      const result = await response.json();
+      if (!response.ok) return { ok: false, error: result.error || 'PDF copy could not be created.' };
+      const failed = (result.recipients || []).filter((recipient) => recipient.status !== 'sent');
+      return { ok: !failed.length, title: result.title, error: failed.length ? `PDF saved, but email failed for ${failed.map((recipient) => recipient.email).join(', ')}.` : '' };
+    } catch (error) {
+      return { ok: false, error: error.message === 'Failed to fetch' ? 'The PDF email service could not be reached.' : error.message };
+    }
+  }
+
+  function paymentDocumentEvent(charge, tenant, type = 'payment') {
+    const paid = charge.status === 'paid';
+    return {
+      type,
+      title: type === 'payment_update' ? 'Payment record updated' : paid ? 'Payment receipt' : 'Payment charge record',
+      summary: `${charge.description || 'Property payment'} has been recorded as ${String(charge.status || 'unpaid').replaceAll('_', ' ')}. This record is for ${tenant?.full_name || 'the property account'}.`,
+      tenantId: charge.tenant_id || tenant?.id || null, propertyId: charge.property_id || tenant?.property_id || null,
+      details: [
+        { label: 'Description', value: charge.description || 'Property payment' },
+        { label: 'Category', value: charge.category || 'other' },
+        { label: 'Amount', value: currency(charge.amount) },
+        { label: 'Record status', value: String(charge.status || 'unpaid').replaceAll('_', ' ') },
+        { label: 'Due date', value: charge.due_date ? dateLabel(charge.due_date) : 'Not specified' },
+        { label: 'Payment date', value: charge.paid_at ? dateLabel(charge.paid_at) : 'Not paid / not recorded' },
+        ...(charge.period_start || charge.period_end ? [{ label: 'Payment period', value: `${charge.period_start ? dateLabel(charge.period_start) : 'Not specified'} to ${charge.period_end ? dateLabel(charge.period_end) : 'Not specified'}` }] : []),
+      ],
+    };
+  }
+
   async function notifyTenantTeamAssignment(tenantId, previousStaffIds = []) {
     if (!import.meta.env.VITE_DOCUMENT_API_URL || !supabase) return { ok: false, error: 'Email service URL is not configured.' };
     try {
@@ -792,12 +829,41 @@ function App() {
     }
     setTenants((current) => [{ ...tenant, property_id: propertyId }, ...current]);
     setSaving(false); setModal(false);
+    const recordCopyWarnings = [];
+    const registrationPdf = await sendRecordDocument({
+      type: 'tenant_registration', title: 'New tenancy registration',
+      summary: `${name} has been registered as a tenant${propertyId ? ' and linked to a property' : ''}.`,
+      tenantId: tenant.id, propertyId,
+      details: [
+        { label: 'Tenant', value: name }, { label: 'Lease start', value: dateLabel(leaseStart) },
+        { label: 'Lease end', value: dateLabel(leaseEnd) }, { label: 'Rent amount', value: `${currency(amount)} per ${String(form.get('rent_frequency') || 'period')}` },
+        ...(firstRentPayment ? [{ label: 'Initial rent received', value: currency(firstRentPayment) }] : []),
+        ...(firstDepositPayment ? [{ label: 'Deposit received', value: currency(firstDepositPayment) }] : []),
+        ...additionalCharges.map((charge) => ({ label: charge.description, value: `${currency(charge.amount)} · ${charge.status}${charge.period_start ? ` · ${dateLabel(charge.period_start)} to ${dateLabel(charge.period_end)}` : ''}` })),
+      ],
+    });
+    if (!registrationPdf.ok) recordCopyWarnings.push(registrationPdf.error);
+    for (const charge of nextPayments.filter((item) => item.tenant_id === tenant.id)) {
+      const paymentPdf = await sendRecordDocument(paymentDocumentEvent(charge, { ...tenant, property_id: propertyId }, 'payment'));
+      if (!paymentPdf.ok) recordCopyWarnings.push(paymentPdf.error);
+    }
     await sendTenantPackets(tenant.id);
     await sendProfileInvitation('tenant', tenant.id);
     if (tenant.agent_id || tenant.caretaker_id || tenant.lawyer_id) {
       const notification = await notifyTenantTeamAssignment(tenant.id);
-      if (!notification.ok) setToast(`Tenant registered. In-app alerts were recorded, but assignment email notifications need attention: ${notification.error}`);
+      if (!notification.ok) recordCopyWarnings.push(notification.error);
+      const assignmentPdf = await sendRecordDocument({
+        type: 'team_assignment', title: 'Property team assignment update',
+        summary: `The property team has been assigned to support ${name}.`, tenantId: tenant.id, propertyId,
+        details: [
+          { label: 'Assigned agent', value: staffRecords.find((person) => person.id === tenant.agent_id)?.full_name || 'Not assigned' },
+          { label: 'Assigned caretaker', value: staffRecords.find((person) => person.id === tenant.caretaker_id)?.full_name || 'Not assigned' },
+          { label: 'Assigned lawyer', value: staffRecords.find((person) => person.id === tenant.lawyer_id)?.full_name || 'Not assigned' },
+        ],
+      });
+      if (!assignmentPdf.ok) recordCopyWarnings.push(assignmentPdf.error);
     }
+    if (recordCopyWarnings.length) setToast(`Tenant registration is complete. Some PDF or email copies need attention: ${[...new Set(recordCopyWarnings)].join(' ')}`);
   }
 
   async function saveOtherRecord(event) {
@@ -858,6 +924,7 @@ function App() {
     }
     setSaving(true);
     let renewalEndDate = null;
+    let paymentPdfWarning = '';
     let { data, error } = await supabase.from(table).insert({ ...row, owner_id: auth.id }).select().single();
     if (!error && page === 'Payments & charges' && data.tenant_id && form.get('category') === 'rent' && String(form.get('description') || '').toLowerCase().startsWith('renewal rent') && form.get('status') === 'paid') {
       const extended = await supabase.rpc('set_rent_payment_status', { p_charge_id: data.id, p_status: 'paid', p_paid_at: form.get('paid_at') || localDateISO(), p_reason: null, p_duration_months: row.lease_extension_months });
@@ -886,11 +953,15 @@ function App() {
     if (page === 'Properties') setPropertyRecords((current) => [data, ...current]);
     if (page === 'Payments & charges') setPaymentRecords((current) => [data, ...current]);
     setRecords((current) => [data, ...current]); setModal(false);
+    if (page === 'Payments & charges') {
+      const pdfResult = await sendRecordDocument(paymentDocumentEvent(data, tenants.find((item) => item.id === data.tenant_id), 'payment'));
+      if (!pdfResult.ok) paymentPdfWarning = ` PDF/email copy needs attention: ${pdfResult.error}`;
+    }
     if (page === 'Caretakers' || page === 'Agents' || page === 'Lawyers') {
       setToast('Record saved. Sending profile invitation…');
       if (data.email) await sendProfileInvitation(data.role, data.id);
       else setToast('Record saved. Add an email address to send a profile invitation.');
-    } else setToast(renewalEndDate ? `Renewal recorded. The lease now ends ${dateLabel(renewalEndDate)}.` : page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : 'Record saved to your Yemilaz Properties account.');
+    } else setToast(`${renewalEndDate ? `Renewal recorded. The lease now ends ${dateLabel(renewalEndDate)}.` : page === 'Properties' ? (data.is_advertised ? 'Property saved and advertised on the dashboard.' : 'Property saved. You can advertise it from Properties.') : page === 'Payments & charges' && !paymentPdfWarning ? 'Payment recorded. A labelled PDF copy was emailed and saved to property documents.' : 'Record saved to your Yemilaz Properties account.'}${paymentPdfWarning}`);
   }
 
   async function deleteProperty(property, confirmed = false) {
@@ -1021,6 +1092,7 @@ function App() {
       setSaving(false);
       if (error) { setToast(error.message); return; }
       setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
+      const pdfResult = await sendRecordDocument(paymentDocumentEvent(data, tenant || tenants.find((item) => item.id === data.tenant_id), 'payment_update'));
       let renewedLeaseEnd = null;
       if (isRenewalRent && shouldSyncRenewal) {
         const { data: updatedTenants } = await supabase.from('tenants').select('*').eq('owner_id', auth.id);
@@ -1029,7 +1101,7 @@ function App() {
           renewedLeaseEnd = updatedTenants.find((item) => item.id === (tenant?.id || editingPerson.tenant_id))?.lease_end || null;
         }
       }
-      setEditingPerson(null); setToast(isRenewalRent && status === 'paid' && renewedLeaseEnd ? `Renewal recorded. The lease has been extended through ${dateLabel(renewedLeaseEnd)}.` : 'Transaction updated and saved.'); return;
+      setEditingPerson(null); setToast(`${isRenewalRent && status === 'paid' && renewedLeaseEnd ? `Renewal recorded. The lease has been extended through ${dateLabel(renewedLeaseEnd)}.` : 'Transaction updated and saved.'}${pdfResult.ok ? ' A clearly labelled PDF copy was emailed and saved to property documents.' : ` PDF/email copy needs attention: ${pdfResult.error}`}`); return;
     }
     const table = kind === 'tenant' ? 'tenants' : kind === 'guarantor' ? 'guarantors' : 'staff';
     if (kind === 'tenant' && (!form.get('lease_start') || !form.get('lease_end') || form.get('lease_end') < form.get('lease_start') || Number(form.get('rent_amount')) <= 0)) { setToast('Enter valid tenancy dates and a rent amount greater than zero.'); return; }
@@ -1063,7 +1135,28 @@ function App() {
       if (assignmentsChanged) {
         const notification = await notifyTenantTeamAssignment(data.id, oldAssignments);
         if (!notification.ok) assignmentEmailWarning = `Assignment email notifications need attention: ${notification.error}`;
+        const assignmentPdf = await sendRecordDocument({
+          type: 'team_assignment', title: 'Property team assignment update',
+          summary: `The assigned property team for ${data.full_name} has been updated.`, tenantId: data.id, propertyId: data.property_id,
+          details: [
+            { label: 'Tenant', value: data.full_name },
+            { label: 'Assigned agent', value: staffRecords.find((person) => person.id === data.agent_id)?.full_name || 'Not assigned' },
+            { label: 'Assigned caretaker', value: staffRecords.find((person) => person.id === data.caretaker_id)?.full_name || 'Not assigned' },
+            { label: 'Assigned lawyer', value: staffRecords.find((person) => person.id === data.lawyer_id)?.full_name || 'Not assigned' },
+          ],
+        });
+        if (!assignmentPdf.ok) assignmentEmailWarning += `${assignmentEmailWarning ? ' ' : ''}Team update PDF/email needs attention: ${assignmentPdf.error}`;
       }
+      const tenantUpdatePdf = await sendRecordDocument({
+        type: 'tenant_registration', title: 'Tenant profile update',
+        summary: `The tenancy details for ${data.full_name} have been updated.`, tenantId: data.id, propertyId: data.property_id,
+        details: [
+          { label: 'Tenant', value: data.full_name }, { label: 'Rent', value: `${currency(data.rent_amount)} per ${data.rent_frequency || 'period'}` },
+          { label: 'Lease start', value: data.lease_start ? dateLabel(data.lease_start) : 'Not recorded' },
+          { label: 'Lease end', value: data.lease_end ? dateLabel(data.lease_end) : 'Not recorded' },
+        ],
+      });
+      if (!tenantUpdatePdf.ok) assignmentEmailWarning += `${assignmentEmailWarning ? ' ' : ''}Tenant update PDF/email needs attention: ${tenantUpdatePdf.error}`;
       if (tenantExtraCharges.length) {
         const newCharges = tenantExtraCharges.map((charge) => ({ owner_id: auth.id, tenant_id: data.id, property_id: data.property_id || null, description: `${charge.description} — ${data.full_name}`, category: charge.category, amount: charge.amount, due_date: charge.due_date, paid_at: charge.paid_at, period_start: charge.period_start, period_end: charge.period_end, status: charge.status }));
         const { data: insertedCharges, error: chargeError } = await supabase.from('service_charges').insert(newCharges).select();
@@ -1075,7 +1168,7 @@ function App() {
     else if (kind === 'staff') { setStaffRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item)); }
     else setRecords((current) => current.map((item) => item.id === data.id ? { ...item, ...data } : item));
     setSaving(false);
-    setEditingPerson(null); setToast(assignmentEmailWarning ? `Tenant details saved. ${assignmentEmailWarning}` : kind === 'tenant' && tenantExtraCharges.length ? 'Tenant details and additional charges saved.' : 'Contact details updated.');
+    setEditingPerson(null); setToast(assignmentEmailWarning ? `Tenant details saved. ${assignmentEmailWarning}` : kind === 'tenant' ? 'Tenant details updated. A labelled PDF copy was emailed and saved to property documents.' : 'Contact details updated.');
   }
 
   async function voidTransaction(record, confirmed = false, reason = '') {
@@ -1106,7 +1199,9 @@ function App() {
     finally { setTransactionActionId(null); }
     if (error) { const message = `Could not void this transaction: ${error.message}`; setConfirmError(message); setToast(message); return false; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
+    const pdfResult = await sendRecordDocument(paymentDocumentEvent({ ...data, status: 'voided' }, tenants.find((item) => item.id === data.tenant_id), 'payment_update'));
     setToast('Transaction voided. Its history has been kept.');
+    if (!pdfResult.ok) setToast(`Transaction voided. PDF/email copy needs attention: ${pdfResult.error}`);
     setConfirmError('');
     return true;
   }
@@ -1142,7 +1237,8 @@ function App() {
     finally { setTransactionActionId(null); }
     if (error) { const message = `Could not update this payment: ${error.message}`; setConfirmError(message); setToast(message); return false; }
     setPaymentRecords((current) => current.map((item) => item.id === data.id ? data : item));
-    setToast(status === 'paid' && renewalEndDate ? `Renewal recorded. The lease now ends ${dateLabel(renewalEndDate)}.` : status === 'paid' ? 'Payment recorded as paid.' : 'Payment marked unpaid.');
+    const paymentPdf = await sendRecordDocument(paymentDocumentEvent(data, tenants.find((item) => item.id === data.tenant_id), 'payment_update'));
+    setToast(`${status === 'paid' && renewalEndDate ? `Renewal recorded. The lease now ends ${dateLabel(renewalEndDate)}.` : status === 'paid' ? 'Payment recorded as paid.' : 'Payment marked unpaid.'}${paymentPdf.ok ? ' A labelled PDF copy was emailed and saved to property documents.' : ` PDF/email copy needs attention: ${paymentPdf.error}`}`);
     setConfirmError('');
     return true;
   }
@@ -1246,7 +1342,7 @@ function App() {
 
       <main className="main-area">
         <header className="topbar"><button className="icon-button mobile-menu" aria-label="Open property management navigation" onClick={() => setMenu(true)}><Menu size={19}/></button><nav className="breadcrumb" aria-label="Breadcrumb"><span className="breadcrumb-workspace">{landlordProfile?.business_name || 'Yemilaz Properties'}</span><span className="breadcrumb-separator">/</span><b aria-current="page">{navLabels[page] || (page === 'Overview' ? 'Dashboard' : page)}</b><small className="platform-context">Property management</small></nav><div className="top-actions"><button className="header-notifications" aria-label={`Notifications${notifications.some((notice) => !notice.read_at) ? `, ${notifications.filter((notice) => !notice.read_at).length} unread` : ''}`} onClick={() => setPage('Notifications')}><Bell size={17}/>{notifications.some((notice) => !notice.read_at) && <i>{notifications.filter((notice) => !notice.read_at).length}</i>}</button><button className="help-btn" onClick={() => setToast('How can we help? Email hello@yemilazproperties.com')}><CircleHelp size={17}/><span>Help centre</span></button><div className="top-divider"/>{auth ? <><button className="profile-avatar top-avatar" title={auth.email} aria-label={`Signed in as ${auth.email}`}>{initials(auth.email || 'YA')}</button><button className="top-logout" onClick={() => supabase.auth.signOut()}><LogOut size={15}/><span>Log out</span></button></> : <button className="sign-in" onClick={() => setAuthModal(true)}>Sign in</button>}</div></header>
-        {page === 'Platform staff' && isPlatformAdmin ? <PlatformStaffPage client={supabase}/> : page === 'Listing verification' && (isPlatformAdmin || platformPermissions.includes('listing_verification')) ? <ListingVerificationPage client={supabase}/> : page === 'Complaints' && portal === 'admin' && !isPlatformAdmin && platformPermissions.includes('complaints_read') ? <ComplaintInbox records={records} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} currentUserId={auth.id} onNew={() => {}} allowNew={false} readOnly unreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => setActiveComplaint(item)}/> : ['Audit history','Security & privacy','Property documents','Inspections','Property incidents','Email delivery','Property messages','Property notices','Tenant profile requests'].includes(page) ? <OperationsHub page={page} auth={auth} tenants={tenants} properties={propertyRecords} isAdmin={isPlatformAdmin}/> : page === 'Property insights' ? <PropertyInsights properties={propertyRecords} tenants={tenants} payments={paymentRecords} onNavigate={setPage} onExport={() => exportPortfolioCsv(propertyRecords, tenants, paymentRecords)}/> : page === 'Notifications' ? <NotificationsPage notices={notifications} onRead={markNotificationRead}/> : page === 'Rent schedule' ? <RentSchedulePage charges={paymentRecords} tenants={tenants} onNavigate={setPage} onSetTransactionPaid={setTransactionPaid}/> : page === 'Maintenance' ? <MaintenancePage records={records} properties={propertyRecords} tenants={tenants} staff={staffRecords} userId={auth?.id} onSave={async (row, invoice) => { const { data, error } = await supabase.from('maintenance_requests').insert(row).select().single(); if (error) { setToast(error.message); return false; } let saved=data; if(invoice instanceof File&&invoice.size){if(invoice.size>20*1024*1024){setToast('Invoice must be smaller than 20 MB. Request saved without the file.');}else{const path=`${auth.id}/${data.id}/${invoice.name.replace(/[^\w.-]/g,'_')}`;const {error:uploadError}=await supabase.storage.from('maintenance-invoices').upload(path,invoice,{contentType:invoice.type});if(uploadError)setToast(`Request saved, but invoice upload failed: ${uploadError.message}`);else{const updated=await supabase.from('maintenance_requests').update({invoice_path:path}).eq('id',data.id).select().single();if(!updated.error)saved=updated.data;}}}setRecords((current) => [saved, ...current]); setToast('Maintenance request recorded.'); return true; }} onUpdate={async (item, values) => { const { data, error } = await supabase.from('maintenance_requests').update(values).eq('id', item.id).eq('owner_id', auth.id).select().single(); if (error) setToast(error.message); else { setRecords((current) => current.map((row) => row.id === data.id ? data : row)); const note = values.resolution_notes?.trim() || `Request status updated to ${(values.status || item.status).replaceAll('_',' ')}.`; const updateResult = await supabase.from('maintenance_request_updates').insert({ owner_id: auth.id, request_id: item.id, tenant_id: item.tenant_id, author_id: auth.id, body: note }); if (updateResult.error) setToast(`Maintenance status saved, but tenant update could not be sent: ${updateResult.error.message}`); } }}/> : page === 'Documents & signatures' ? <TenancySignaturesPage tenants={tenants} profile={landlordProfile} auth={auth}/> : page === 'Viewing calendar' ? <ViewingCalendarPage requests={records} onUpdate={updateViewingStatus} properties={propertyRecords}/> : page === 'Overview' ? <>
+        {page === 'Platform staff' && isPlatformAdmin ? <PlatformStaffPage client={supabase}/> : page === 'Listing verification' && (isPlatformAdmin || platformPermissions.includes('listing_verification')) ? <ListingVerificationPage client={supabase}/> : page === 'Complaints' && portal === 'admin' && !isPlatformAdmin && platformPermissions.includes('complaints_read') ? <ComplaintInbox records={records} activeComplaint={activeComplaint} setActiveComplaint={setActiveComplaint} messages={complaintMessages} onSend={addComplaintMessage} onResolution={changeComplaintResolution} currentUserId={auth.id} onNew={() => {}} allowNew={false} readOnly unreadCounts={complaintUnreadCounts} onOpenComplaint={(item) => setActiveComplaint(item)}/> : ['Audit history','Security & privacy','Property documents','Inspections','Property incidents','Email delivery','Property messages','Property notices','Tenant profile requests'].includes(page) ? <OperationsHub page={page} auth={auth} tenants={tenants} properties={propertyRecords} isAdmin={isPlatformAdmin} onRecordDocument={sendRecordDocument}/> : page === 'Property insights' ? <PropertyInsights properties={propertyRecords} tenants={tenants} payments={paymentRecords} onNavigate={setPage} onExport={() => exportPortfolioCsv(propertyRecords, tenants, paymentRecords)}/> : page === 'Notifications' ? <NotificationsPage notices={notifications} onRead={markNotificationRead}/> : page === 'Rent schedule' ? <RentSchedulePage charges={paymentRecords} tenants={tenants} onNavigate={setPage} onSetTransactionPaid={setTransactionPaid}/> : page === 'Maintenance' ? <MaintenancePage records={records} properties={propertyRecords} tenants={tenants} staff={staffRecords} userId={auth?.id} onRecordDocument={sendRecordDocument} onSave={async (row, invoice) => { const { data, error } = await supabase.from('maintenance_requests').insert(row).select().single(); if (error) { setToast(error.message); return false; } let saved=data; if(invoice instanceof File&&invoice.size){if(invoice.size>20*1024*1024){setToast('Invoice must be smaller than 20 MB. Request saved without the file.');}else{const path=`${auth.id}/${data.id}/${invoice.name.replace(/[^\w.-]/g,'_')}`;const {error:uploadError}=await supabase.storage.from('maintenance-invoices').upload(path,invoice,{contentType:invoice.type});if(uploadError)setToast(`Request saved, but invoice upload failed: ${uploadError.message}`);else{const updated=await supabase.from('maintenance_requests').update({invoice_path:path}).eq('id',data.id).select().single();if(!updated.error)saved=updated.data;}}}setRecords((current) => [saved, ...current]); const tenant=tenants.find((item)=>item.id===saved.tenant_id); const pdf=await sendRecordDocument({type:'maintenance',title:`Maintenance request: ${saved.title}`,summary:saved.description,tenantId:saved.tenant_id,propertyId:saved.property_id,details:[{label:'Priority',value:saved.priority},{label:'Status',value:saved.status},{label:'Reported',value:dateLabel(saved.created_at?.slice(0,10))}]}); setToast(pdf.ok?'Maintenance request recorded. A labelled PDF copy was emailed and saved to property documents.':`Maintenance request recorded. PDF/email copy needs attention: ${pdf.error}`); return true; }} onUpdate={async (item, values) => { const { data, error } = await supabase.from('maintenance_requests').update(values).eq('id', item.id).eq('owner_id', auth.id).select().single(); if (error) setToast(error.message); else { setRecords((current) => current.map((row) => row.id === data.id ? data : row)); const note = values.resolution_notes?.trim() || `Request status updated to ${(values.status || item.status).replaceAll('_',' ')}.`; const updateResult = await supabase.from('maintenance_request_updates').insert({ owner_id: auth.id, request_id: item.id, tenant_id: item.tenant_id, author_id: auth.id, body: note }); if (updateResult.error) setToast(`Maintenance status saved, but tenant update could not be sent: ${updateResult.error.message}`); const tenant=tenants.find((person)=>person.id===item.tenant_id); const pdf=await sendRecordDocument({type:'maintenance',title:'Maintenance status update',summary:note,tenantId:item.tenant_id,propertyId:item.property_id,details:[{label:'Request',value:item.title},{label:'New status',value:String(values.status||item.status).replaceAll('_',' ')},{label:'Updated',value:dateLabel(new Date().toISOString().slice(0,10))}]}); if(!pdf.ok)setToast(`Maintenance updated. PDF/email copy needs attention: ${pdf.error}`); } }}/> : page === 'Documents & signatures' ? <TenancySignaturesPage tenants={tenants} profile={landlordProfile} auth={auth}/> : page === 'Viewing calendar' ? <ViewingCalendarPage requests={records} onUpdate={updateViewingStatus} properties={propertyRecords}/> : page === 'Overview' ? <>
           <section className="welcome-row"><div><div className="eyebrow">{new Date().toLocaleDateString('en-NG', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()} <span className="live-dot"/></div><h1>Good morning, {landlordProfile?.full_name?.split(' ')[0] || 'Landlord'} <span>✳</span></h1><p>Here’s what’s happening with your properties today.</p></div><button className="primary-button" onClick={() => { if (!auth) { setAuthModal(true); return; } setInitialPaymentTotal(0); setModal(true); }}><Plus size={17}/> Add a tenant</button></section>
           <section className="metric-grid"><Metric icon={Building2} label="Total properties" value={auth ? propertyRecords.length : '—'} note="Across your portfolio" color="lavender"/><Metric icon={Users} label="Active tenants" value={auth ? tenants.filter((tenant) => tenant.status === 'active' && (!tenant.lease_end || tenant.lease_end >= todayISO)).length : '—'} note="Current lease records" color="mint"/><Metric icon={Wallet} label="Overdue rent" value={auth ? currency(overdueRentTotal) : '—'} note={`${overdueRent.length} unpaid rent ${overdueRent.length === 1 ? 'record' : 'records'}`} color="peach"/><Metric icon={Clock3} label="Renewals due soon" value={auth ? leasesNeedingRenewal.length : '—'} note={`${leasesPastEnd.length} lease${leasesPastEnd.length === 1 ? '' : 's'} ended · review`} color="blue"/></section>
           {(overdueRent.length > 0 || leasesNeedingRenewal.length > 0 || leasesPastEnd.length > 0) && <section className="panel attention-panel"><div><span className="eyebrow">NEEDS YOUR ATTENTION</span><h2>Rent and lease reminders</h2><p>Review overdue balances and lease end dates. Lease end is a prompt to review renewal or next steps; no eviction action is automatic.</p></div><div className="attention-actions">{overdueRent.length > 0 && <button className="attention-action overdue" onClick={() => setPage('Rent schedule')}><b>{overdueRent.length} overdue rent {overdueRent.length === 1 ? 'item' : 'items'}</b><small>{currency(overdueRentTotal)} outstanding · Review rent schedule</small></button>}{leasesNeedingRenewal.length > 0 && <button className="attention-action" onClick={() => setPage('Tenants')}><b>{leasesNeedingRenewal.length} renewal {leasesNeedingRenewal.length === 1 ? 'due' : 'dates due'} within 30 days</b><small>Contact the tenant and record the agreed renewal</small></button>}{leasesPastEnd.length > 0 && <button className="attention-action overdue" onClick={() => setPage('Tenants')}><b>{leasesPastEnd.length} lease{leasesPastEnd.length === 1 ? '' : 's'} ended · review</b><small>Check occupancy, agreement terms and required notice steps</small></button>}</div></section>}
@@ -2090,7 +2186,7 @@ function PropertyMessagePanel({ auth, tenant = null, staff = null }) {
 
 function MfaVerificationGate({onVerify,onSignOut}) { const [code,setCode]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');async function submit(event){event.preventDefault();setBusy(true);const message=await onVerify(code.trim());setBusy(false);if(message)setError(message);}return <main className="admin-access-screen"><section className="admin-access-card"><BrandLockup name="Yemilaz Properties"/><span className="admin-access-icon"><ShieldCheck/></span><span className="eyebrow">OPTIONAL ACCOUNT SECURITY</span><h1>Verify your sign-in</h1><p>Enter the current six-digit code from your authenticator app to continue.</p><form onSubmit={submit}><label>Authenticator code<input autoComplete="one-time-code" inputMode="numeric" minLength="6" maxLength="6" required value={code} onChange={e=>setCode(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy?'Checking…':'Verify and continue'}</button></form>{error&&<p role="alert">{error}</p>}<button className="secondary-button" onClick={onSignOut}>Sign out</button></section></main>; }
 
-function OperationsHub({ page, auth, tenants, properties, isAdmin }) {
+function OperationsHub({ page, auth, tenants, properties, isAdmin, onRecordDocument }) {
   const [rows,setRows]=useState([]);const {pageItems:pageRows,controls:operationsPagination}=usePaginatedItems(rows, 'operation records');const [contacts,setContacts]=useState([]);const [busy,setBusy]=useState(false);const [feedback,setFeedback]=useState('');const [mfa,setMfa]=useState(false);const [mfaData,setMfaData]=useState(null);const [otp,setOtp]=useState('');const [from,setFrom]=useState('');const [to,setTo]=useState('');
   const tableByPage={'Audit history':'audit_events','Property documents':'property_documents','Inspections':'property_inspections','Property incidents':'property_incidents','Email delivery':'tenant_packet_deliveries','Property messages':'property_messages','Security & privacy':'privacy_requests','Property notices':'property_notices','Tenant profile requests':'tenant_profile_requests'};
   async function load(){const table=tableByPage[page];if(!table)return;let query=supabase.from(table).select('*').order('created_at',{ascending:false}).limit(250);if(page==='Property messages')query=query.or(`sender_id.eq.${auth.id},recipient_id.eq.${auth.id},owner_id.eq.${auth.id}`);const {data,error}=await query;if(error)setFeedback(error.message);else setRows(data||[]);}
@@ -2099,11 +2195,11 @@ function OperationsHub({ page, auth, tenants, properties, isAdmin }) {
   async function mfaVerify(event){event.preventDefault();setBusy(true);const {data:challenge,error:challengeError}=await supabase.auth.mfa.challenge({factorId:mfaData.id});if(challengeError){setBusy(false);setFeedback(challengeError.message);return;}const {error}=await supabase.auth.mfa.verify({factorId:mfaData.id,challengeId:challenge.id,code:otp});if(error)setFeedback(error.message);else{await supabase.from('account_security_preferences').upsert({user_id:auth.id,mfa_opt_in:true,updated_at:new Date().toISOString()});setMfa(true);setMfaData(null);setFeedback('Optional two-step verification is enabled for your account.');}setBusy(false);}
   async function mfaDisable(){const {data,error}=await supabase.auth.mfa.listFactors();if(error){setFeedback(error.message);return;}for(const factor of data.totp||[])await supabase.auth.mfa.unenroll({factorId:factor.id});await supabase.from('account_security_preferences').upsert({user_id:auth.id,mfa_opt_in:false,updated_at:new Date().toISOString()});setMfa(false);setFeedback('Two-step verification is turned off.');}
   async function uploadDocument(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);const file=fd.get('file');if(!(file instanceof File)||!file.size)return;if(file.size>20*1024*1024){setFeedback('Choose a document smaller than 20 MB.');return;}setBusy(true);const id=crypto.randomUUID();const path=`${auth.id}/${id}/${file.name.replace(/[^\w.-]/g,'_')}`;const {error:uploadError}=await supabase.storage.from('property-documents').upload(path,file,{contentType:file.type,upsert:false});if(uploadError){setBusy(false);setFeedback(uploadError.message);return;}const {error}=await supabase.from('property_documents').insert({owner_id:auth.id,property_id:fd.get('property_id')||null,tenant_id:fd.get('tenant_id')||null,uploaded_by:auth.id,title:String(fd.get('title')||file.name),storage_path:path,mime_type:file.type});setBusy(false);if(error){setFeedback(error.message);return;}form.reset();setFeedback('Private property document uploaded.');load();}
-  async function addInspection(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);setBusy(true);const paths=[];const photos=fd.getAll('inspection_photos').filter(file=>file instanceof File&&file.size);if(photos.some(file=>file.size>20*1024*1024)){setBusy(false);setFeedback('Each inspection photo must be smaller than 20 MB.');return;}for(const photo of photos){const path=`${auth.id}/inspections/${crypto.randomUUID()}-${photo.name.replace(/[^\w.-]/g,'_')}`;const {error:uploadError}=await supabase.storage.from('property-documents').upload(path,photo,{contentType:photo.type});if(uploadError){setBusy(false);setFeedback(uploadError.message);return;}paths.push(path);}const {error}=await supabase.from('property_inspections').insert({owner_id:auth.id,property_id:fd.get('property_id')||null,tenant_id:fd.get('tenant_id')||null,inspection_type:fd.get('inspection_type'),inspection_date:fd.get('inspection_date'),condition:fd.get('condition'),notes:fd.get('notes')||null,checklist:fd.getAll('checklist'),photo_paths:paths,created_by:auth.id});setBusy(false);if(error)setFeedback(error.message);else{form.reset();setFeedback('Inspection recorded.');load();}}
+  async function addInspection(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);setBusy(true);const paths=[];const photos=fd.getAll('inspection_photos').filter(file=>file instanceof File&&file.size);if(photos.some(file=>file.size>20*1024*1024)){setBusy(false);setFeedback('Each inspection photo must be smaller than 20 MB.');return;}for(const photo of photos){const path=`${auth.id}/inspections/${crypto.randomUUID()}-${photo.name.replace(/[^\w.-]/g,'_')}`;const {error:uploadError}=await supabase.storage.from('property-documents').upload(path,photo,{contentType:photo.type});if(uploadError){setBusy(false);setFeedback(uploadError.message);return;}paths.push(path);}const {data,error}=await supabase.from('property_inspections').insert({owner_id:auth.id,property_id:fd.get('property_id')||null,tenant_id:fd.get('tenant_id')||null,inspection_type:fd.get('inspection_type'),inspection_date:fd.get('inspection_date'),condition:fd.get('condition'),notes:fd.get('notes')||null,checklist:fd.getAll('checklist'),photo_paths:paths,created_by:auth.id}).select().single();setBusy(false);if(error)setFeedback(error.message);else{const tenant=tenants.find(item=>item.id===data.tenant_id);const pdf=await onRecordDocument({type:'inspection',title:'Property inspection report',summary:`${String(data.inspection_type).replaceAll('_',' ')} inspection recorded for ${tenant?.full_name||'the property'}.`,tenantId:data.tenant_id,propertyId:data.property_id,details:[{label:'Inspection date',value:data.inspection_date},{label:'Overall condition',value:data.condition},{label:'Checklist',value:(data.checklist||[]).join(', ')||'No checklist items selected'},...(data.notes?[{label:'Additional notes',value:data.notes}]:[])]});form.reset();setFeedback(pdf.ok?'Inspection report saved, emailed and added to property documents.':`Inspection saved. PDF/email copy needs attention: ${pdf.error}`);load();}}
   async function submitPrivacy(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);setBusy(true);const {error}=await supabase.from('privacy_requests').insert({user_id:auth.id,full_name:String(fd.get('full_name')),email:auth.email,request_type:fd.get('request_type'),details:String(fd.get('details'))});setBusy(false);if(error)setFeedback(error.message);else{form.reset();setFeedback('Your privacy request has been submitted.');load();}}
   async function sendMessage(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);const contact=contacts.find(item=>item.user_id===fd.get('recipient_id'));if(!contact)return;setBusy(true);const {error}=await supabase.from('property_messages').insert({owner_id:auth.id,tenant_id:contact.tenant_id,property_id:contact.property_id,sender_id:auth.id,recipient_id:contact.user_id,body:String(fd.get('body')).trim()});setBusy(false);if(error)setFeedback(error.message);else{form.reset();setFeedback('Message sent.');load();}}
   async function openFile(path,bucket='property-documents'){const {data,error}=await supabase.storage.from(bucket).createSignedUrl(path,60);if(error)setFeedback(error.message);else window.open(data.signedUrl,'_blank','noopener,noreferrer');}
-  async function publishNotice(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);setBusy(true);const {error}=await supabase.from('property_notices').insert({owner_id:auth.id,created_by:auth.id,property_id:fd.get('property_id')||null,title:String(fd.get('title')).trim(),body:String(fd.get('body')).trim(),priority:fd.get('priority')});setBusy(false);if(error)setFeedback(error.message);else{form.reset();setFeedback('Notice published. Linked tenants have been notified.');load();}}
+  async function publishNotice(event){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);const propertyId=fd.get('property_id')||null;const title=String(fd.get('title')).trim();const body=String(fd.get('body')).trim();setBusy(true);const {data,error}=await supabase.from('property_notices').insert({owner_id:auth.id,created_by:auth.id,property_id:propertyId,title,body,priority:fd.get('priority')}).select().single();setBusy(false);if(error)setFeedback(error.message);else{const linkedTenants=tenants.filter(tenant=>propertyId?tenant.property_id===propertyId:true);let deliveryError='';for(const tenant of linkedTenants){const pdf=await onRecordDocument({type:'property_notice',title:`Property notice: ${title}`,summary:body,tenantId:tenant.id,propertyId:tenant.property_id,details:[{label:'Notice priority',value:data.priority},{label:'Published',value:new Date(data.created_at||Date.now()).toLocaleDateString('en-NG')}]});if(!pdf.ok)deliveryError=pdf.error;}form.reset();setFeedback(deliveryError?`Notice published. PDF/email copy needs attention: ${deliveryError}`:'Notice published. Labelled PDF copies were emailed and saved for linked tenants.');load();}}
   async function reviewProfileRequest(request,approve){const response=window.prompt(approve?'Optional note for the tenant:':'Reason for declining this request:');if(response===null)return;setBusy(true);const {error}=await supabase.rpc('review_tenant_profile_request',{p_request_id:request.id,p_approve:approve,p_response:response});setBusy(false);if(error)setFeedback(error.message);else{setFeedback(approve?'Correction approved and tenant profile updated.':'Correction request declined.');load();}}
   const headings={'Audit history':'Audit history','Security & privacy':'Security and privacy','Property documents':'Property files','Inspections':'Property inspections','Property incidents':'Incident reports','Email delivery':'Document delivery history','Property messages':'Property messages','Property notices':'Property updates','Tenant profile requests':'Tenant profile corrections'};
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">OPERATIONS</div><h1>{headings[page]}</h1><p>{page==='Audit history'?'Review who changed important records and when.':page==='Security & privacy'?'Choose optional account security and submit a data request.':page==='Property documents'?'Store private tenancy, inspection, ownership and invoice files.':page==='Inspections'?'Record move-in, routine and move-out property condition checks.':page==='Property incidents'?'Review safety, damage and urgent property reports submitted by caretakers.':page==='Email delivery'?'See the status of tenant document email attempts.':page==='Property notices'?'Publish updates to everyone or tenants at a selected property.':page==='Tenant profile requests'?'Review requests from tenants to correct their profile details.':'Keep tenant and landlord conversations in a property-linked message thread.'}</p></div></div>
@@ -2247,7 +2343,7 @@ function RentSchedulePage({ charges, tenants, onNavigate, onSetTransactionPaid }
   return <section className="management"><div className="welcome-row"><div><div className="eyebrow">RENT MANAGEMENT</div><h1>Rent schedule</h1><p>Rent entries follow each tenancy’s start date, end date, amount and payment frequency. Record received payments as they come in.</p></div><button className="secondary-button" onClick={() => onNavigate('Payments & charges')}>Open payment ledger <ArrowRight size={15}/></button></div><div className="metric-grid"><Metric icon={CalendarDays} label="Scheduled charges" value={rows.length} note="Rent ledger entries" color="blue"/><Metric icon={Clock3} label="Due or upcoming" value={pending.length-overdue.length} note="Not yet marked paid" color="peach"/><Metric icon={Wallet} label="Overdue" value={overdue.length} note={currency(overdue.reduce((s,r)=>s+Number(r.amount||0),0))} color="lavender"/><Metric icon={Check} label="Paid" value={rows.filter((r)=>r.status==='paid').length} note="Rent payments recorded" color="mint"/></div><div className="panel management-panel"><div className="table-wrap"><table><thead><tr><th>TENANT</th><th>DESCRIPTION</th><th>DUE DATE</th><th>AMOUNT</th><th>STATUS</th><th>REMINDER</th><th>ACTION</th></tr></thead><tbody>{pageRows.map((row)=><tr key={row.id}><td>{tenants.find((t)=>t.id===row.tenant_id)?.full_name||'—'}</td><td>{row.description}</td><td>{dateLabel(row.due_date)}</td><td>{currency(row.amount)}</td><td><span className={`status ${row.status==='paid'?'active':row.status==='waived'?'active':row.due_date<today?'renewal':'active'}`}><i/>{row.status==='paid'?'Paid':row.status==='waived'?'Waived':row.due_date<today?'Overdue':'Unpaid'}</span></td><td>{row.status==='unpaid'&&tenants.find((t)=>t.id===row.tenant_id)?.email?<a className="secondary-button compact-button" href={`mailto:${encodeURIComponent(tenants.find((t)=>t.id===row.tenant_id).email)}?subject=${encodeURIComponent('Rent reminder · Yemilaz Properties')}&body=${encodeURIComponent(`Hello ${tenants.find((t)=>t.id===row.tenant_id).full_name}, this is a reminder that ${currency(row.amount)} rent is due on ${dateLabel(row.due_date)}. Please contact your landlord if you have questions.`)}`}>Email reminder</a>:'—'}</td><td>{row.status==='unpaid'?<button className="primary-button compact-button" onClick={()=>onSetTransactionPaid(row,'paid')}>Mark paid</button>:row.status==='paid'?<button className="secondary-button compact-button" onClick={()=>onSetTransactionPaid(row,'unpaid')}>Mark unpaid</button>:'—'}</td></tr>)}</tbody></table>{!rows.length&&<EmptyState title="No rent schedule yet" text="Register a tenant with a lease, rent amount and frequency to generate future rent charges."/>}</div>{rentPagination}</div></section>;
 }
 
-function MaintenancePage({ records, properties, tenants, staff, userId, onSave, onUpdate }) {
+function MaintenancePage({ records, properties, tenants, staff, userId, onSave, onUpdate, onRecordDocument }) {
   const [busy, setBusy] = useState(false);
   const { pageItems: pageRecords, controls: maintenancePagination } = usePaginatedItems(records, 'maintenance requests');
   async function submit(event) { event.preventDefault(); const form=event.currentTarget; const values=new FormData(form); setBusy(true); const invoice=values.get('invoice'); const result=await onSave({owner_id:userId,created_by:userId,requester_role:'landlord',property_id:values.get('property_id')||null,tenant_id:values.get('tenant_id')||null,title:String(values.get('title')).trim(),description:String(values.get('description')).trim(),priority:values.get('priority'),assigned_staff_id:values.get('assigned_staff_id')||null,due_date:values.get('due_date')||null,vendor_name:values.get('vendor_name')||null,actual_cost:values.get('actual_cost')?Number(values.get('actual_cost')):null},invoice); setBusy(false); if(result)form.reset(); }

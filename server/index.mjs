@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { createPdf, createPaymentReceiptPdf, createTenantDocumentSet } from './pdf.mjs';
+import { createPdf, createPaymentReceiptPdf, createRecordUpdatePdf, createTenantDocumentSet } from './pdf.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -377,6 +377,80 @@ app.post('/api/tenant-assignment-notifications', async (req, res) => {
   } catch (error) {
     console.error('Tenant team assignment notifications failed:', error.message);
     res.status(500).json({ error: 'Assignment notifications could not be sent. Check the email service configuration and try again.' });
+  }
+});
+
+app.post('/api/record-document', async (req, res) => {
+  if (!configReady('email')) return res.status(503).json({ error: 'PDF and email delivery is not configured on the document service.' });
+  const accessToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!accessToken) return res.status(401).json({ error: 'Sign in before creating a record copy.' });
+  const user = await authenticate(accessToken);
+  if (!user?.id) return res.status(401).json({ error: 'Your session has expired. Sign in again.' });
+  const event = req.body?.event || {};
+  const allowedTypes = new Set(['payment', 'payment_update', 'tenant_registration', 'team_assignment', 'maintenance', 'inspection', 'property_notice']);
+  const type = String(event.type || '');
+  const title = String(event.title || '').trim().slice(0, 120);
+  const summary = String(event.summary || '').trim().slice(0, 500);
+  const details = Array.isArray(event.details) ? event.details.slice(0, 20).map((item) => ({ label: String(item?.label || '').trim().slice(0, 80), value: String(item?.value || '').trim().slice(0, 300) })).filter((item) => item.label && item.value) : [];
+  const tenantId = event.tenantId && /^[0-9a-f-]{36}$/i.test(String(event.tenantId)) ? String(event.tenantId) : null;
+  const propertyId = event.propertyId && /^[0-9a-f-]{36}$/i.test(String(event.propertyId)) ? String(event.propertyId) : null;
+  if (!allowedTypes.has(type) || title.length < 3 || !summary || !details.length) return res.status(400).json({ error: 'A valid record type, clear title, summary and record details are required.' });
+  try {
+    let tenant = null;
+    if (tenantId) {
+      tenant = (await supabaseRequest(`tenants?id=eq.${tenantId}&owner_id=eq.${user.id}&select=id,owner_id,full_name,email,property_id,agent_id,caretaker_id,lawyer_id,lease_start,lease_end,rent_amount`, accessToken))?.[0];
+      if (!tenant) return res.status(404).json({ error: 'The linked tenant record was not found in your account.' });
+    }
+    let property = null;
+    const linkedPropertyId = propertyId || tenant?.property_id || null;
+    if (linkedPropertyId) {
+      property = (await supabaseRequest(`properties?id=eq.${linkedPropertyId}&owner_id=eq.${user.id}&select=id,name,address,city,state,country`, accessToken))?.[0] || null;
+    }
+    const profile = (await supabaseRequest(`landlord_profiles?user_id=eq.${user.id}&select=full_name,business_name,phone`, accessToken))?.[0] || {};
+    const staffIds = [tenant?.agent_id, tenant?.caretaker_id, tenant?.lawyer_id].filter(Boolean);
+    const staff = staffIds.length ? await supabaseRequest(`staff?id=in.(${staffIds.join(',')})&owner_id=eq.${user.id}&select=full_name,email,role`, accessToken) : [];
+    const recipientMap = new Map();
+    for (const recipient of [{ email: user.email, name: profile.full_name || 'Property owner', role: 'property owner' }, { email: tenant?.email, name: tenant?.full_name, role: 'tenant' }, ...(staff || []).map((person) => ({ email: person.email, name: person.full_name, role: person.role }))]) {
+      if (recipient.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email)) recipientMap.set(recipient.email.toLowerCase(), recipient);
+    }
+    const recipients = [...recipientMap.values()];
+    const documentTitle = `${title} · ${tenant?.full_name || property?.name || 'Property record'}`;
+    const safeId = safeName(tenant?.full_name || property?.name || 'record');
+    const filename = `${safeName(type)}-${safeId}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    const pdf = createRecordUpdatePdf({
+      brand: profile.business_name || 'Yemilaz Properties', title, subtitle: summary,
+      recipient: tenant?.full_name || property?.name || profile.full_name || user.email,
+      sections: [
+        ...(tenant ? [{ type: 'paragraph', text: `Tenant: ${tenant.full_name} | Email: ${tenant.email || 'Not recorded'}` }] : []),
+        ...(property ? [{ type: 'paragraph', text: `Property: ${property.name} | ${[property.address, property.city, property.state, property.country].filter(Boolean).join(', ')}` }] : []),
+        ...details.map((item) => ({ type: 'paragraph', text: `${item.label}: ${item.value}` })),
+      ],
+    });
+    const path = `${user.id}/${tenant?.id || 'records'}/${crypto.randomUUID()}/${filename}`;
+    const upload = await fetch(`${supabaseUrl}/storage/v1/object/property-documents/${path}`, {
+      method: 'POST', headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/pdf', 'x-upsert': 'false' }, body: pdf,
+    });
+    if (!upload.ok) throw new Error(`PDF storage failed (${upload.status}): ${(await upload.text()).slice(0, 200)}`);
+    await supabaseRequest('property_documents', accessToken, {
+      method: 'POST', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ owner_id: user.id, tenant_id: tenant?.id || null, property_id: linkedPropertyId, uploaded_by: user.id, title: documentTitle, storage_path: path, mime_type: 'application/pdf', recipient_emails: recipients.map((recipient) => recipient.email), document_category: type === 'payment' || type === 'payment_update' ? 'payment_receipt' : 'property_update' }),
+    });
+    const deliveryResults = [];
+    for (const recipient of recipients) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST', headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: sender, to: [recipient.email], subject: `${profile.business_name || 'Yemilaz Properties'} | ${documentTitle}`, text: `Hello ${recipient.name || 'there'},\n\nAttached is your copy of “${title}”.\n\n${summary}\n\nThis PDF is also available in the property documents area of your account. Contact the property manager if anything needs correction.\n\nYemilaz Properties`, attachments: [{ filename, content: pdf.toString('base64') }] }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || result.error || `Email provider returned ${response.status}`);
+        deliveryResults.push({ email: recipient.email, status: 'sent' });
+      } catch (error) { deliveryResults.push({ email: recipient.email, status: 'failed', error: error.message }); }
+    }
+    res.json({ saved: true, title: documentTitle, recipients: deliveryResults });
+  } catch (error) {
+    console.error('Record PDF delivery failed:', error.message);
+    res.status(500).json({ error: 'The record was saved, but its PDF copy could not be created or delivered.' });
   }
 });
 

@@ -235,3 +235,12 @@ export function createPaymentReceiptPdf({ charge, tenant, landlord, property }) 
     { type: 'signatures', labels: ['Landlord / authorized representative', 'Tenant acknowledgement'] },
   ]);
 }
+
+export function createRecordUpdatePdf({ brand = 'Yemilaz Properties', title, subtitle, recipient, sections = [] }) {
+  const blocks = [
+    { type: 'section', title: 'Update summary' },
+    ...sections,
+    { type: 'callout', text: 'This document is a record of information entered on Yemilaz Properties. Keep it with your tenancy and property records. Contact the property manager if any detail needs correction.' },
+  ];
+  return details(brand, title, subtitle, recipient, blocks);
+}
