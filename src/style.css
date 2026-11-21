@@ -952,3 +952,20 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 @keyframes hero-arrive{from{opacity:.6;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(max-width:700px){.main-area .welcome-row{align-items:flex-start;gap:13px;margin:14px 0;padding:19px;border-radius:14px}.main-area .welcome-row:after{right:-120px}.main-area .welcome-row>.primary-button,.main-area .welcome-row>.secondary-button{flex:0 0 auto}.tenant-workspace{padding-top:20px}.tenant-workspace .tenant-profile-card{min-height:unset;border-radius:15px}.tenant-workspace .tenant-profile-card .welcome-actions button{flex:1 1 100%}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+/* Extend the same premium visual system to caretaker, agent and lawyer portals. */
+.staff-portal-shell{background:radial-gradient(ellipse at 90% 4%,#e4f0e8 0,transparent 28%),linear-gradient(180deg,#f7faf8,#eff5f2)}
+.staff-portal-shell .portal-header{border-color:#dfe9e3;background:rgba(255,255,255,.94);box-shadow:0 8px 26px rgba(23,61,50,.07)}
+.staff-portal-shell .portal-role-chip{border:1px solid #d7e8de;background:#eaf4ee;color:#15574e}
+.staff-portal-shell .staff-portal{gap:17px;padding-top:31px}
+.staff-portal-shell .staff-portal .tenant-profile-card{position:relative;isolation:isolate;overflow:hidden;min-height:196px;border:1px solid #1d5d54;border-left:4px solid var(--gold-500);border-radius:18px;background:radial-gradient(circle at 89% 25%,rgba(96,157,136,.28),transparent 24%),linear-gradient(112deg,#143a35 0%,#18564d 64%,#1d6a5d 100%);box-shadow:0 19px 46px rgba(18,63,53,.18);animation:page-rise .6s both}
+.staff-portal-shell .staff-portal .tenant-profile-card:after{position:absolute;z-index:-1;right:7%;bottom:-115px;width:260px;height:260px;border:1px solid rgba(255,255,255,.14);border-radius:50%;box-shadow:0 0 0 25px rgba(255,255,255,.035),0 0 0 52px rgba(255,255,255,.025);content:""}
+.staff-portal-shell .staff-portal .tenant-profile-card .eyebrow{color:#e2c783}
+.staff-portal-shell .staff-portal .tenant-profile-card h1{color:#fff}
+.staff-portal-shell .staff-portal .tenant-profile-card p{color:#d5e6df}
+.staff-portal-shell .staff-portal .tenant-profile-card .primary-button{background:#fff;color:#15574e;box-shadow:0 7px 18px rgba(0,0,0,.12)}
+.staff-portal-shell .staff-portal .tenant-profile-card .secondary-button{border-color:#ffffff52;background:#ffffff14;color:#fff}
+.staff-portal-shell .staff-portal .tenant-profile-section,.staff-portal-shell .staff-portal .tenant-summary-card{border-color:#e2ebe6;border-radius:15px;box-shadow:0 9px 28px rgba(23,61,50,.045);transition:transform .22s ease,box-shadow .22s ease}
+.staff-portal-shell .staff-portal .tenant-profile-section:hover,.staff-portal-shell .staff-portal .tenant-summary-card:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(23,61,50,.085)}
+.staff-portal-shell .staff-portal .primary-button{min-height:39px;height:auto;border-radius:9px;background:linear-gradient(135deg,#17665d,#14544e);box-shadow:0 6px 15px rgba(23,102,93,.16);transition:transform .18s ease,box-shadow .18s ease}
+.staff-portal-shell .staff-portal .primary-button:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(23,102,93,.22)}
+@media(max-width:700px){.staff-portal-shell .staff-portal{padding-top:20px}.staff-portal-shell .staff-portal .tenant-profile-card{min-height:unset;border-radius:15px}}
