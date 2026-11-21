@@ -969,6 +969,14 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .staff-portal-shell .staff-portal .primary-button{min-height:39px;height:auto;border-radius:9px;background:linear-gradient(135deg,#17665d,#14544e);box-shadow:0 6px 15px rgba(23,102,93,.16);transition:transform .18s ease,box-shadow .18s ease}
 .staff-portal-shell .staff-portal .primary-button:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(23,102,93,.22)}
 @media(max-width:700px){.staff-portal-shell .staff-portal{padding-top:20px}.staff-portal-shell .staff-portal .tenant-profile-card{min-height:unset;border-radius:15px}}
+
+.portal-section-navigation{position:sticky;top:80px;z-index:20;display:flex;align-items:center;gap:12px;min-width:0;padding:10px 12px;border:1px solid #dfe9e3;border-radius:13px;background:rgba(255,255,255,.96);box-shadow:0 8px 22px rgba(23,61,50,.07);backdrop-filter:blur(12px)}
+.portal-section-navigation-label{flex:none;color:#7b8982;font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase}
+.portal-section-navigation>div{display:flex;align-items:center;gap:7px;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+.portal-section-navigation button{flex:none;min-height:34px;padding:0 12px;border:1px solid #e1ebe5;border-radius:9px;background:#f8fbf9;color:#31584e;font:650 11px 'DM Sans',sans-serif;white-space:nowrap;cursor:pointer;transition:background .18s ease,border-color .18s ease,color .18s ease}
+.portal-section-navigation button:hover,.portal-section-navigation button:focus-visible{border-color:#9dbfb3;background:#eaf4ef;color:#124d44;outline:0}
+.stakeholder-portal [id^="tenant-"],.stakeholder-portal [id^="staff-"],.stakeholder-portal [id="community-account"]{scroll-margin-top:84px}
+@media(max-width:650px){.portal-section-navigation{position:sticky;top:104px;display:block;padding:8px;border-radius:11px}.portal-section-navigation-label{display:block;margin:0 2px 6px;font-size:8px}.portal-section-navigation>div{gap:6px;padding-bottom:2px}.portal-section-navigation button{min-height:32px;padding:0 10px;font-size:10px}.stakeholder-portal [id^="tenant-"],.stakeholder-portal [id^="staff-"],.stakeholder-portal [id="community-account"]{scroll-margin-top:140px}}
 .existing-account-next-step{display:flex;align-items:flex-start;gap:8px;padding:11px 12px;border:1px solid #d9e9df;border-radius:10px;background:linear-gradient(110deg,#f0f7f2,#f8faf8);color:#426357;line-height:1.55}
 .existing-account-next-step svg{flex:none;margin-top:1px;color:#17665d}
 .additional-profile-shell .community-management-hero{margin-bottom:20px}
