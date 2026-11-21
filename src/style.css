@@ -892,3 +892,17 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .spotlight-message-body{margin:20px 0;padding:18px;border:1px solid #e5ece7;border-radius:12px;background:#f7faf8;color:#344740;font-size:14px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
 .spotlight-message-close{position:absolute;top:15px;right:15px;display:grid;width:34px;height:34px;place-items:center;border:1px solid #e1e8e3;border-radius:50%;background:#f8faf8;color:#40584f;font-size:22px;cursor:pointer}
 @media(max-width:650px){.community-portal-shell .portal-header-actions{width:100%;justify-content:flex-start}.community-portal-shell .portal-header-actions .community-signout{margin-left:auto}.spotlight-message-overlay{align-items:end;padding:0}.spotlight-message-dialog{width:100%;max-height:88dvh;padding:22px 18px calc(22px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}.spotlight-message-dialog h3{font-size:20px}}
+.account-photo-control{position:relative;display:inline-flex;flex:none;vertical-align:middle}
+.account-photo-button{position:relative;overflow:hidden;flex:none;padding:0;border:0;cursor:pointer}
+.account-photo-button img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.account-photo-button>i{position:absolute;right:-1px;bottom:-1px;display:grid;width:17px;height:17px;place-items:center;border:2px solid #fff;border-radius:50%;background:#17665d;color:#fff;font-style:normal;opacity:0;transition:opacity .15s}
+.account-photo-button:hover>i,.account-photo-button:focus-visible>i{opacity:1}
+.account-photo-button:has(img)>i{opacity:.92}
+.account-photo-loading{position:absolute;inset:0;display:grid;place-items:center;background:#173b35a8;color:#fff;font-weight:800}
+.account-photo-status{position:absolute;z-index:220;top:calc(100% + 7px);right:0;width:max-content;max-width:min(280px,80vw);padding:8px 10px;border:1px solid #dce8e1;border-radius:8px;background:#fff;color:#304b41;font-size:10px;box-shadow:0 7px 22px #173d321c}
+.account-photo-control.top-avatar .account-photo-button{width:34px;height:34px}
+.profile-row .account-photo-button{width:31px;height:31px}
+.portal-header-actions>.account-photo-control .account-photo-button{width:38px;height:38px;background:#e8f0eb;color:#17665d}
+.portal-header-actions .portal-logout{display:inline-flex;visibility:visible;opacity:1;flex:0 0 auto;white-space:nowrap}
+@media(max-width:650px){.portal-header-actions .portal-logout{order:99;margin-left:auto;min-height:37px;padding:7px 11px}.portal-header-actions>.account-photo-control .account-photo-button{width:34px;height:34px}.portal-header-actions .homepage-visibility-shortcut{max-width:100%}}
+@media(max-width:570px){.top-logout span{display:inline!important}.top-actions .homepage-visibility-shortcut{display:none}.top-actions{flex-wrap:nowrap;min-width:max-content}}
