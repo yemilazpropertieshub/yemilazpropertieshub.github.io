@@ -319,4 +319,65 @@ app.post('/api/profile-invitations', async (req, res) => {
   }
 });
 
+app.post('/api/tenant-assignment-notifications', async (req, res) => {
+  if (!configReady('email')) return res.status(503).json({ error: 'Assignment email is not configured on the document service.' });
+  const accessToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!accessToken) return res.status(401).json({ error: 'Sign in as the property owner before sending assignment notifications.' });
+  const user = await authenticate(accessToken);
+  if (!user?.id) return res.status(401).json({ error: 'Your session has expired. Sign in again.' });
+  const origin = req.headers.origin;
+  if (!origin || !allowedOrigins.includes(origin)) return res.status(403).json({ error: 'This website is not allowed to send assignment notifications.' });
+  const tenantId = String(req.body?.tenantId || '');
+  const previousIds = Array.isArray(req.body?.previousStaffIds) ? req.body.previousStaffIds : [];
+  if (!/^[0-9a-f-]{36}$/i.test(tenantId) || previousIds.length > 3 || previousIds.some((id) => !/^[0-9a-f-]{36}$/i.test(String(id)))) {
+    return res.status(400).json({ error: 'Choose a valid tenant and team assignment.' });
+  }
+
+  try {
+    const tenantRows = await supabaseRequest(`tenants?id=eq.${tenantId}&owner_id=eq.${user.id}&select=id,owner_id,full_name,email,property_id,agent_id,caretaker_id,lawyer_id`, accessToken);
+    const tenant = tenantRows?.[0];
+    if (!tenant) return res.status(404).json({ error: 'That tenant is not registered in your property account.' });
+
+    const staffIds = [...new Set([...previousIds, tenant.agent_id, tenant.caretaker_id, tenant.lawyer_id].filter(Boolean))];
+    const staffRows = staffIds.length
+      ? await supabaseRequest(`staff?id=in.(${staffIds.join(',')})&owner_id=eq.${user.id}&select=id,full_name,email,role`, accessToken)
+      : [];
+    const assignments = (staffRows || []).filter((person) => person.email);
+    const roleSummary = assignments.filter((person) => [tenant.agent_id, tenant.caretaker_id, tenant.lawyer_id].includes(person.id))
+      .map((person) => `${person.role}: ${person.full_name}`).join(', ') || 'No team members are currently assigned';
+    const recipientMap = new Map();
+    for (const person of [{ email: user.email, name: 'Property owner', role: 'property owner' }, { email: tenant.email, name: tenant.full_name, role: 'tenant' }, ...assignments.map((person) => ({ email: person.email, name: person.full_name, role: person.role }))]) {
+      if (person.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(person.email)) recipientMap.set(person.email.toLowerCase(), person);
+    }
+    const safe = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    const tenantName = safe(tenant.full_name || 'Tenant');
+    const sent = [];
+    const failed = [];
+    for (const recipient of recipientMap.values()) {
+      const accountUrl = new URL('/', origin);
+      if (['tenant', 'agent', 'caretaker', 'lawyer'].includes(recipient.role)) {
+        accountUrl.searchParams.set('join', recipient.role);
+        accountUrl.searchParams.set('email', recipient.email);
+      } else {
+        accountUrl.searchParams.set('portal', 'account');
+      }
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: sender, to: [recipient.email],
+          subject: `Property team update for ${tenant.full_name || 'your tenancy'} | Yemilaz Properties`,
+          text: `Hello ${recipient.name || 'there'},\n\nThe property team assignment for ${tenant.full_name || 'this tenancy'} has been updated. Current team: ${roleSummary}.\n\nReview the tenancy details or set up your ${recipient.role} profile here: ${accountUrl.toString()}\n\nIf you have questions, contact the property owner.\n\nYemilaz Properties`,
+          html: `<div style="font-family:Arial,sans-serif;color:#24312f;max-width:600px;margin:auto;padding:32px"><div style="font-size:12px;letter-spacing:2px;color:#b08c4d;font-weight:bold">YEMILAZ PROPERTIES</div><h1 style="font-size:24px;margin:24px 0 12px">Property team assignment updated</h1><p>Hello ${safe(recipient.name || 'there')},</p><p>The team connected to <b>${tenantName}</b> has been updated.</p><p style="padding:16px;background:#f2f6f4;border-radius:8px"><b>Current team:</b> ${safe(roleSummary)}</p><p>Review the tenancy details or set up your account:</p><p style="margin:24px 0"><a href="${safe(accountUrl.toString())}" style="display:inline-block;background:#15574f;color:white;text-decoration:none;padding:14px 22px;border-radius:8px;font-weight:bold">Open Yemilaz Properties</a></p><p>If you have questions, contact the property owner.</p><p style="margin-top:32px;color:#777;font-size:12px">Yemilaz Properties · Property management</p></div>`,
+        }),
+      });
+      const result = await response.json();
+      if (response.ok) sent.push(recipient.email); else failed.push({ email: recipient.email, error: result.message || result.error || `Email provider returned ${response.status}` });
+    }
+    res.json({ sent: sent.length, failed });
+  } catch (error) {
+    console.error('Tenant team assignment notifications failed:', error.message);
+    res.status(500).json({ error: 'Assignment notifications could not be sent. Check the email service configuration and try again.' });
+  }
+});
+
 app.listen(port, () => console.log(`Yemilaz document service listening on ${port}`));
