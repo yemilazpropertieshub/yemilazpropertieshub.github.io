@@ -906,3 +906,49 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .portal-header-actions .portal-logout{display:inline-flex;visibility:visible;opacity:1;flex:0 0 auto;white-space:nowrap}
 @media(max-width:650px){.portal-header-actions .portal-logout{order:99;margin-left:auto;min-height:37px;padding:7px 11px}.portal-header-actions>.account-photo-control .account-photo-button{width:34px;height:34px}.portal-header-actions .homepage-visibility-shortcut{max-width:100%}}
 @media(max-width:570px){.top-logout span{display:inline!important}.top-actions .homepage-visibility-shortcut{display:none}.top-actions{flex-wrap:nowrap;min-width:max-content}}
+/* Premium interaction layer for public, tenant, landlord and administrator screens. */
+:root{--jade-950:#143a35;--jade-800:#17665d;--jade-100:#eaf4ef;--gold-500:#c8a75d;--surface-shadow:0 14px 42px rgba(22,55,47,.07)}
+.main-area{background:radial-gradient(ellipse at 88% 12%,rgba(222,239,229,.45),transparent 28%),linear-gradient(180deg,#f8faf8 0%,#f4f7f5 58%,#f8faf8 100%)}
+.main-area .welcome-row{position:relative;isolation:isolate;overflow:hidden;min-height:124px;margin:22px 0 17px;padding:25px 28px;border:1px solid #dfe9e3;border-radius:18px;background:linear-gradient(112deg,#fff 0%,#f6faf7 67%,#edf5ef 100%);box-shadow:0 12px 34px rgba(23,61,50,.055);animation:page-rise .55s both}
+.main-area .welcome-row:after{position:absolute;z-index:-1;right:-38px;bottom:-93px;width:270px;height:220px;border:1px solid rgba(23,102,93,.08);border-radius:50%;box-shadow:0 0 0 26px rgba(23,102,93,.025),0 0 0 54px rgba(23,102,93,.018);content:"";pointer-events:none}
+.main-area .welcome-row .eyebrow{color:#9a8050;letter-spacing:1.65px}
+.main-area .welcome-row h1{color:#192f35;font-size:clamp(25px,2.6vw,34px);letter-spacing:-1px}
+.main-area .welcome-row p{max-width:720px;color:#6d7c75;font-size:12px;line-height:1.75}
+.main-area .welcome-row>.primary-button,.main-area .welcome-row>.secondary-button{position:relative;z-index:1;min-height:43px;height:auto;padding:0 17px;border-radius:10px}
+.main-area .panel,.main-area .metric-card,.main-area .management-panel,.main-area .operations-card{border-color:#e3ebe6;border-radius:15px;box-shadow:0 8px 25px rgba(25,58,48,.035);transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.main-area .metric-card{background:linear-gradient(150deg,#fff,#fbfdfb);}
+.main-area .panel:hover,.main-area .metric-card:hover,.main-area .management-panel:hover,.main-area .operations-card:hover{transform:translateY(-2px);border-color:#d4e3da;box-shadow:0 15px 34px rgba(25,58,48,.075)}
+.main-area .panel-heading h2,.main-area .listings-heading h2{color:#1d3838;letter-spacing:-.45px}
+.main-area .primary-button{min-height:39px;height:auto;border-radius:9px;background:linear-gradient(135deg,#17665d,#14544e);box-shadow:0 6px 15px rgba(23,102,93,.16);transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.main-area .primary-button:hover{transform:translateY(-1px);background:linear-gradient(135deg,#1d756b,#14544e);box-shadow:0 9px 20px rgba(23,102,93,.22)}
+.main-area input:not([type=checkbox]):not([type=radio]),.main-area select,.main-area textarea,.tenant-workspace input:not([type=checkbox]):not([type=radio]),.tenant-workspace select,.tenant-workspace textarea{border-color:#dfe8e3;border-radius:9px;transition:border-color .18s ease,box-shadow .18s ease}
+.main-area input:focus,.main-area select:focus,.main-area textarea:focus,.tenant-workspace input:focus,.tenant-workspace select:focus,.tenant-workspace textarea:focus{border-color:#6da99a;box-shadow:0 0 0 3px rgba(23,102,93,.1);outline:0}
+.main-area table thead th{color:#718078;letter-spacing:.8px}
+.main-area table tbody tr{transition:background .16s ease}
+.main-area table tbody tr:hover{background:#f5faf7}
+.tenant-workspace-shell{background:radial-gradient(ellipse at 8% 2%,#e8f2ec 0,transparent 31%),linear-gradient(180deg,#f6f9f7,#f2f6f4);}
+.tenant-workspace-shell .portal-header{box-shadow:0 8px 26px rgba(23,61,50,.07)}
+.tenant-workspace{gap:17px;padding-top:31px}
+.tenant-workspace .tenant-profile-card{position:relative;isolation:isolate;overflow:hidden;min-height:196px;border:1px solid #1d5d54;border-left:4px solid var(--gold-500);border-radius:18px;background:radial-gradient(circle at 89% 25%,rgba(96,157,136,.28),transparent 24%),linear-gradient(112deg,#143a35 0%,#18564d 64%,#1d6a5d 100%);box-shadow:0 19px 46px rgba(18,63,53,.18);animation:page-rise .6s both}
+.tenant-workspace .tenant-profile-card:after{position:absolute;z-index:-1;right:7%;bottom:-115px;width:260px;height:260px;border:1px solid rgba(255,255,255,.14);border-radius:50%;box-shadow:0 0 0 25px rgba(255,255,255,.035),0 0 0 52px rgba(255,255,255,.025);content:""}
+.tenant-workspace .tenant-profile-card .eyebrow{color:#e2c783}
+.tenant-workspace .tenant-profile-card h1{color:#fff}
+.tenant-workspace .tenant-profile-card p{color:#d5e6df}
+.tenant-workspace .tenant-profile-card .welcome-actions{position:relative;z-index:1}
+.tenant-workspace .tenant-profile-card .primary-button{background:#fff;color:#15574e;box-shadow:0 7px 18px rgba(0,0,0,.12)}
+.tenant-workspace .tenant-profile-card .secondary-button{border-color:#ffffff52;background:#ffffff14;color:#fff}
+.tenant-workspace .tenant-profile-section,.tenant-workspace .tenant-summary-card{border-color:#e2ebe6;border-radius:15px;box-shadow:0 9px 28px rgba(23,61,50,.045);transition:transform .22s ease,box-shadow .22s ease}
+.tenant-workspace .tenant-profile-section:hover,.tenant-workspace .tenant-summary-card:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(23,61,50,.085)}
+.community-portal-shell{background:radial-gradient(ellipse at 88% 5%,#e5f1e9 0,transparent 27%),linear-gradient(180deg,#f7faf8,#eff5f2)}
+.community-portal-shell .community-management-hero,.community-portal-shell .panel{border-radius:17px;box-shadow:var(--surface-shadow)}
+.public-site{background:#fbfcfa}
+.public-site .public-section-heading h2,.public-site .community-spotlight-heading h2{color:#183b35;letter-spacing:-1.1px}
+.public-site .public-listings .property-card,.public-site .market-card,.public-site .community-spotlight-card{border-radius:15px;box-shadow:0 10px 30px rgba(16,43,53,.07);transition:transform .24s ease,box-shadow .24s ease,border-color .24s ease}
+.public-site .market-card:hover,.public-site .community-spotlight-card:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(16,43,53,.12)}
+.public-site .public-hero-copy{animation:page-rise .68s both}
+.public-site .public-hero-photo{animation:hero-arrive .8s .08s both}
+.public-site .public-section-heading{scroll-margin-top:95px}
+@keyframes page-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes hero-arrive{from{opacity:.6;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:700px){.main-area .welcome-row{align-items:flex-start;gap:13px;margin:14px 0;padding:19px;border-radius:14px}.main-area .welcome-row:after{right:-120px}.main-area .welcome-row>.primary-button,.main-area .welcome-row>.secondary-button{flex:0 0 auto}.tenant-workspace{padding-top:20px}.tenant-workspace .tenant-profile-card{min-height:unset;border-radius:15px}.tenant-workspace .tenant-profile-card .welcome-actions button{flex:1 1 100%}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
