@@ -130,8 +130,7 @@ function ScrollNavigation() {
     return () => { window.removeEventListener('scroll', update); window.removeEventListener('resize', update); observer.disconnect(); };
   }, []);
   return <div className="scroll-navigation" aria-label="Page navigation">
-    {position.top > 180 && <button type="button" aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18}/><span>Top</span></button>}
-    {!position.bottom && <button type="button" aria-label="Go to bottom" title="Go to bottom" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}><ArrowDown size={18}/><span>Bottom</span></button>}
+    {position.top > 180 && <button type="button" aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18}/><span>Back to top</span></button>}
   </div>;
 }
 
