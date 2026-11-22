@@ -1117,3 +1117,29 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .public-site .public-hero-banner .hero-category-rail>a:hover{color:#f0d38b}
 @media(max-width:900px){.public-site .public-hero-banner{height:660px;min-height:660px}.public-site .public-hero-banner .public-hero-copy{padding:80px 30px 145px}.public-site .public-hero-banner h1{font-size:clamp(50px,7.2vw,70px)}.public-site .public-hero-banner .hero-category-rail{width:calc(100% - 60px);gap:18px 24px;flex-wrap:wrap}.public-site .public-hero-banner .hero-category-rail>span{width:100%}}
 @media(max-width:650px){.public-site .public-hero-banner{height:auto;min-height:0;display:block;padding:0 18px 17px}.public-site .hero-banner-image{inset:0}.public-site .hero-banner-image:after{background:linear-gradient(90deg,rgba(8,29,30,.86),rgba(11,39,37,.46)),linear-gradient(0deg,rgba(8,29,30,.85),transparent 50%)}.public-site .public-hero-banner .public-hero-copy{padding:84px 0 30px}.public-site .public-hero-banner .public-hero-copy .public-eyebrow{font-size:8px;letter-spacing:1.3px}.public-site .public-hero-banner h1{font-size:clamp(45px,12vw,60px);line-height:1.04;letter-spacing:-2.7px;margin:17px 0 13px}.public-site .public-hero-banner .public-hero-copy>p{font-size:13px;line-height:1.7;margin-bottom:19px}.public-site .public-hero-banner .public-hero-actions{gap:9px 11px}.public-site .public-hero-banner .public-hero-actions .primary-button,.public-site .public-hero-banner .public-login-cta{min-height:43px;height:43px;padding:0 12px;font-size:10px}.public-site .public-hero-banner .public-text-button{font-size:10px}.public-site .public-hero-banner .public-hero-trust{gap:10px;margin-top:19px;padding-top:13px}.public-site .public-hero-banner .public-hero-trust>span{min-width:0;flex:1}.public-site .public-hero-banner .public-hero-trust b{font-size:9px}.public-site .public-hero-banner .public-hero-trust small{font-size:8px}.public-site .public-hero-banner .trust-icon{width:28px;height:28px}.public-site .public-hero-banner .hero-category-rail{position:relative;inset:auto;width:100%;min-height:0;gap:12px 17px;padding:14px 0 3px}.public-site .public-hero-banner .hero-category-rail>span{font-size:8px}.public-site .public-hero-banner .hero-category-rail>a{font-size:9px}}
+
+/* Homepage rhythm polish: reduce oversized gaps and tighten paragraph leading. */
+.public-site .public-hero-banner .public-hero-copy>p{line-height:1.62;margin-bottom:21px}
+.public-site .public-hero-banner .public-hero-trust{margin-top:22px;padding-top:14px}
+.public-site .market-overview{padding-block:58px 62px}
+.public-site .market-overview-heading{margin-bottom:19px}
+.public-site .market-overview-heading p{line-height:1.55}
+.public-site .community-spotlight{padding-top:34px;padding-bottom:16px}
+.public-site .community-spotlight-heading{margin-bottom:14px}
+.public-site .community-spotlight-heading p{line-height:1.5}
+.public-site .public-listings{padding-top:50px;padding-bottom:60px}
+.public-site .public-section-heading{margin-bottom:20px}
+.public-site .public-section-heading p{line-height:1.6}
+.public-site .public-listings .listing-filters{margin-top:18px;padding:14px}
+.public-site .public-features{padding-top:66px;padding-bottom:70px}
+.public-site .public-features-heading{margin-bottom:30px}
+.public-site .public-features-heading h2{line-height:1.08;margin:7px 0}
+.public-site .public-features-heading p{line-height:1.6}
+.public-site .feature-category-group{margin-bottom:26px}
+.public-site .public-about{padding-top:56px;padding-bottom:56px;gap:36px}
+.public-site .public-about h2{line-height:1.04}
+.public-site .public-about>p{line-height:1.65}
+.public-site .public-support{padding-top:32px;padding-bottom:34px}
+.public-site .support-intro,.public-site .support-grid p{line-height:1.45}
+@media(max-width:900px){.public-site .market-overview{padding-block:48px 52px}.public-site .public-features{padding-top:55px;padding-bottom:58px}.public-site .public-about{padding-top:46px;padding-bottom:46px;gap:26px}}
+@media(max-width:650px){.public-site .public-hero-banner .public-hero-copy{padding-top:70px;padding-bottom:23px}.public-site .public-hero-banner .public-hero-copy>p{line-height:1.55;margin-bottom:16px}.public-site .public-hero-banner .public-hero-trust{margin-top:15px;padding-top:11px}.public-site .public-hero-banner .hero-category-rail{padding-top:10px;row-gap:9px}.public-site .market-overview{padding-block:37px 40px}.public-site .community-spotlight{padding-top:19px;padding-bottom:2px}.public-site .public-listings{padding-top:31px;padding-bottom:38px}.public-site .public-section-heading p{line-height:1.5}.public-site .public-features{padding-top:40px;padding-bottom:43px}.public-site .public-features-heading{margin-bottom:21px}.public-site .feature-category-group{margin-bottom:19px}.public-site .public-about{padding-top:35px;padding-bottom:35px;gap:13px}.public-site .public-about>p{line-height:1.55}.public-site .public-support{padding-top:24px;padding-bottom:24px}}
