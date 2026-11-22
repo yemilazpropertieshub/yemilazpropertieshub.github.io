@@ -96,6 +96,8 @@ body,.public-site{background:#f6f7f5;color:#1d2933}.sidebar{background:#fbfcfb;b
 .notification-popover-footer{padding:12px 18px;background:#fbfcfb}
 .notification-all-link{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:38px;border:1px solid #dfe8e4;border-radius:9px;background:#fff;color:#12675c;font-size:11px;font-weight:700;cursor:pointer}
 .notification-all-link:hover{background:#f0f7f3}
+.sidebar-backdrop{display:none}
+@media(max-width:850px){.sidebar-backdrop{position:fixed;inset:0;z-index:9;display:block;width:100%;height:100%;border:0;background:#142b2b70;backdrop-filter:blur(2px)}.sidebar.open{z-index:10}.mobile-menu{display:grid;place-items:center;flex:none;width:38px;height:38px;border:1px solid #e3eae7;border-radius:10px;background:#fff;color:#49646a}.mobile-menu:hover{background:#f1f7f4;color:#087767}.mobile-close{display:grid;place-items:center;width:36px;height:36px;border:1px solid #e3eae7;border-radius:9px;background:#fff;color:#49646a;cursor:pointer}}
 @media(max-width:570px){.notification-popover{top:69px;right:12px;left:12px;width:auto;max-width:none;max-height:calc(100dvh - 84px);border-radius:14px}.notification-popover-heading{padding:16px 15px 13px}.notification-popover-item{padding:13px 15px}.notification-unread-dot{right:15px}.notification-popover-footer{padding:10px 14px}}
 .help-btn{height:38px;padding:0 12px;border:1px solid transparent;border-radius:9px;color:#576b70;font-size:11px;font-weight:650}
 .help-btn:hover{background:#f4f7f5;color:#075b51}
