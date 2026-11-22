@@ -70,6 +70,33 @@ body,.public-site{background:#f6f7f5;color:#1d2933}.sidebar{background:#fbfcfb;b
 .header-notifications{position:relative;width:38px;height:38px;display:grid;place-items:center;border:1px solid #e3eae7;border-radius:10px;background:#fff;color:#49646a;transition:background .18s,border-color .18s,color .18s}
 .header-notifications:hover{background:#f1f7f4;border-color:#cbdcd5;color:#087767}
 .header-notifications i{position:absolute;right:-5px;top:-5px;min-width:17px;height:17px;padding:0 4px;border:2px solid #fff;border-radius:99px;background:#a86739;color:#fff;font:700 9px/13px 'DM Sans',sans-serif;text-align:center;font-style:normal}
+.notification-popover-layer{position:fixed;inset:0;z-index:60;background:transparent}
+.notification-popover{position:fixed;z-index:61;top:82px;right:clamp(18px,5vw,88px);display:flex;flex-direction:column;width:min(410px,calc(100vw - 28px));max-height:min(620px,calc(100dvh - 102px));overflow:hidden;border:1px solid #dfe8e4;border-radius:16px;background:#fff;box-shadow:0 22px 70px #102b3529;color:#172f35}
+.notification-popover-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 20px 16px;border-bottom:1px solid #edf1ee}
+.notification-popover-heading .eyebrow{font-size:9px;letter-spacing:1.25px;color:#9a8353;font-weight:750}
+.notification-popover-heading h2{margin:5px 0 3px;font:700 19px/1.2 Manrope,Arial,sans-serif;letter-spacing:-.35px}
+.notification-popover-heading p{margin:0;color:#788780;font-size:11px}
+.notification-popover-close{display:grid;place-items:center;flex:none;width:34px;height:34px;border:1px solid #e6ece8;border-radius:10px;background:#fff;color:#59716d;cursor:pointer}
+.notification-popover-close:hover{background:#f1f7f4;color:#075b51}
+.notification-popover-list{overflow:auto;overscroll-behavior:contain}
+.notification-popover-item{position:relative;display:flex;align-items:flex-start;gap:12px;padding:15px 19px;border-bottom:1px solid #edf1ee}
+.notification-popover-item.is-unread{background:#f7faf8}
+.notification-popover-icon{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:11px;background:#edf5f1;color:#147568}
+.notification-popover-copy{min-width:0;padding-right:12px}
+.notification-popover-copy>b{display:block;margin:0 0 4px;color:#20383c;font-size:12px;line-height:1.4}
+.notification-popover-copy p{margin:0;color:#63736f;font-size:11px;line-height:1.55;overflow-wrap:anywhere}
+.notification-popover-copy small{display:block;margin-top:7px;color:#8a9690;font-size:9px}
+.notification-mark-read{margin-top:8px;padding:0;border:0;background:transparent;color:#087767;font-size:10px;font-weight:700;cursor:pointer}
+.notification-mark-read:hover{text-decoration:underline}
+.notification-unread-dot{position:absolute;top:20px;right:19px;width:8px;height:8px;border-radius:50%;background:#b37a36}
+.notification-popover-empty{display:grid;justify-items:center;gap:7px;padding:34px 22px;text-align:center}
+.notification-popover-empty>span{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#edf5f1;color:#167368}
+.notification-popover-empty>b{font-size:12px;color:#20383c}
+.notification-popover-empty>p{max-width:245px;margin:0;color:#788780;font-size:10px;line-height:1.55}
+.notification-popover-footer{padding:12px 18px;background:#fbfcfb}
+.notification-all-link{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:38px;border:1px solid #dfe8e4;border-radius:9px;background:#fff;color:#12675c;font-size:11px;font-weight:700;cursor:pointer}
+.notification-all-link:hover{background:#f0f7f3}
+@media(max-width:570px){.notification-popover{top:69px;right:12px;left:12px;width:auto;max-width:none;max-height:calc(100dvh - 84px);border-radius:14px}.notification-popover-heading{padding:16px 15px 13px}.notification-popover-item{padding:13px 15px}.notification-unread-dot{right:15px}.notification-popover-footer{padding:10px 14px}}
 .help-btn{height:38px;padding:0 12px;border:1px solid transparent;border-radius:9px;color:#576b70;font-size:11px;font-weight:650}
 .help-btn:hover{background:#f4f7f5;color:#075b51}
 .top-avatar{width:36px;height:36px;background:#e7efe9;color:#15584f;font-size:11px}
