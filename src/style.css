@@ -1024,3 +1024,24 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .existing-account-next-step svg{flex:none;margin-top:1px;color:#17665d}
 .additional-profile-shell .community-management-hero{margin-bottom:20px}
 .additional-profile-shell .account-upgrade-page{max-width:none;margin:0}
+
+/* Homepage proportion and spacing polish: keep the layout composed on wide screens. */
+.public-site .public-nav{padding-inline:max(28px,calc((100vw - 1240px)/2))}
+.public-site .public-hero{max-width:1240px;padding:68px 48px 76px;grid-template-columns:.94fr 1.06fr;gap:7.5%}
+.public-site .public-hero h1{font-size:clamp(48px,5.2vw,70px);line-height:1.08}
+.public-site .public-hero-photo{height:430px}
+.public-site .market-overview{padding-block:76px 80px}
+.public-site .market-overview-heading,.public-site .market-columns{max-width:1240px}
+.public-site .community-spotlight{max-width:1240px;padding:48px 40px 24px}
+.public-site .public-listings{max-width:1240px;padding:62px 48px 78px}
+.public-site .public-listings .property-grid{gap:21px}
+.public-site .public-listings .property-image{height:210px}
+.public-site .public-features{padding:88px max(28px,calc((100vw - 1240px)/2)) 94px}
+.public-site .public-features-heading,.public-site .feature-category-nav,.public-site .feature-category-group{max-width:1240px;margin-inline:auto}
+.public-site .public-features-heading{margin-bottom:42px}
+.public-site .feature-category-group{margin-bottom:34px}
+.public-site .public-about{max-width:1240px;padding:76px 48px;gap:44px}
+.public-site .public-support{max-width:1240px;padding:58px 48px 68px}
+.public-site .public-footer{max-width:1240px}
+@media(max-width:900px){.public-site .public-hero{padding:52px 30px 58px}.public-site .public-hero-photo{height:360px}.public-site .public-listings{padding:48px 30px 58px}.public-site .public-about{padding:55px 30px}.public-site .public-support{padding:46px 30px 54px}.public-site .community-spotlight{padding:36px 30px 16px}}
+@media(max-width:650px){.public-site .public-nav{padding-inline:18px}.public-site .public-hero{padding:38px 18px 42px}.public-site .public-hero-photo{height:250px}.public-site .market-overview{padding-block:45px 48px}.public-site .community-spotlight{padding:24px 15px 4px}.public-site .public-listings{padding:37px 18px 45px}.public-site .public-listings .property-image{height:185px}.public-site .public-features{padding:49px 18px 54px}.public-site .public-about{padding:43px 18px}.public-site .public-support{padding:36px 18px 28px}.public-site .public-footer{padding-inline:18px}}
