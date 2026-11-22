@@ -1088,3 +1088,32 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .public-site .support-faq .faq-item p{font-size:9px;line-height:1.55}
 @media(max-width:900px){.public-site .public-support{padding:34px 26px 36px}.public-site .support-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.public-site .support-heading{align-items:flex-start}}
 @media(max-width:650px){.public-site .public-support{padding:29px 17px 30px}.public-site .support-heading{display:grid;gap:6px;margin-bottom:12px}.public-site .public-support h2{font-size:22px}.public-site .support-intro{font-size:10px}.public-site .support-grid{grid-template-columns:1fr;gap:7px}.public-site .support-grid article{min-height:0;padding:11px 12px;gap:7px}.public-site .support-grid .policy-more-link{margin-top:0}.public-site .support-faq{margin-top:8px;padding:9px 11px}}
+
+/* Full-width photographic homepage hero with the introduction composed over the image. */
+.public-site .public-hero-banner{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;width:100%;max-width:none;height:clamp(610px,72vh,760px);min-height:610px;margin:0;padding:0;overflow:hidden;border-radius:0;background:#183b35;color:#fff}
+.public-site .hero-banner-image{position:absolute;z-index:-2;inset:0;overflow:hidden;background:#183b35}
+.public-site .hero-banner-image:after{position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,29,30,.88) 0%,rgba(11,39,37,.72) 43%,rgba(10,35,34,.24) 100%),linear-gradient(0deg,rgba(8,29,30,.76),transparent 31%);content:""}
+.public-site .hero-banner-image img{display:block;width:100%;height:100%;object-fit:cover;object-position:center 53%;animation:hero-arrive .8s both}
+.public-site .public-hero-banner .public-hero-copy{position:relative;z-index:1;width:min(100%,1240px);max-width:1240px;margin:0 auto;padding:92px 48px 150px;animation:page-rise .68s both}
+.public-site .public-hero-banner .public-eyebrow{color:#e5cb8b;font-size:10px;letter-spacing:1.8px}
+.public-site .public-hero-banner .public-eyebrow i{background:#d5b56e}
+.public-site .public-hero-banner h1{max-width:760px;margin:20px 0 16px;color:#fff;font-size:clamp(52px,6.5vw,82px);line-height:1.02;letter-spacing:-3.8px}
+.public-site .public-hero-banner h1 em{color:#dfc27b}
+.public-site .public-hero-banner .public-hero-copy>p{max-width:550px;margin:0 0 25px;color:#e0e9e5;font-size:15px;line-height:1.75}
+.public-site .public-hero-banner .public-hero-actions{gap:12px 18px}
+.public-site .public-hero-banner .public-hero-actions .primary-button{min-height:48px;height:48px;padding:0 19px;border:1px solid #17665d;border-radius:8px;background:#17665d;color:#fff;font-size:12px;box-shadow:0 9px 22px #071e1d50}
+.public-site .public-hero-banner .public-login-cta{min-height:48px;padding:0 17px;border-color:#ffffff8a;background:#ffffff12;color:#fff;box-shadow:none;backdrop-filter:blur(8px)}
+.public-site .public-hero-banner .public-login-cta:hover{border-color:#fff;background:#ffffff20}
+.public-site .public-hero-banner .public-text-button{padding:10px 0;color:#fff;font-size:11px}
+.public-site .public-hero-banner .public-hero-trust{max-width:580px;margin-top:26px;padding-top:17px;border-color:#ffffff48;color:#fff}
+.public-site .public-hero-banner .public-hero-trust>span{min-width:200px}
+.public-site .public-hero-banner .public-hero-trust b{color:#fff;font-size:11px}
+.public-site .public-hero-banner .public-hero-trust small{color:#d0ddd8;font-size:10px}
+.public-site .public-hero-banner .trust-icon{border:1px solid #ffffff5e;background:#ffffff14;color:#ecd28d}
+.public-site .public-hero-banner .public-hero-trust svg{color:inherit}
+.public-site .public-hero-banner .hero-category-rail{position:absolute;z-index:1;right:0;bottom:0;left:0;width:min(100% - 96px,1144px);min-height:80px;margin:0 auto;padding:17px 0;display:flex;align-items:center;gap:clamp(16px,3.2vw,42px);border-top:1px solid #ffffff4a}
+.public-site .public-hero-banner .hero-category-rail>span{color:#e5ca86;font-size:9px}
+.public-site .public-hero-banner .hero-category-rail>a{color:#f3f6f4;font-size:11px}
+.public-site .public-hero-banner .hero-category-rail>a:hover{color:#f0d38b}
+@media(max-width:900px){.public-site .public-hero-banner{height:660px;min-height:660px}.public-site .public-hero-banner .public-hero-copy{padding:80px 30px 145px}.public-site .public-hero-banner h1{font-size:clamp(50px,7.2vw,70px)}.public-site .public-hero-banner .hero-category-rail{width:calc(100% - 60px);gap:18px 24px;flex-wrap:wrap}.public-site .public-hero-banner .hero-category-rail>span{width:100%}}
+@media(max-width:650px){.public-site .public-hero-banner{height:auto;min-height:0;display:block;padding:0 18px 17px}.public-site .hero-banner-image{inset:0}.public-site .hero-banner-image:after{background:linear-gradient(90deg,rgba(8,29,30,.86),rgba(11,39,37,.46)),linear-gradient(0deg,rgba(8,29,30,.85),transparent 50%)}.public-site .public-hero-banner .public-hero-copy{padding:84px 0 30px}.public-site .public-hero-banner .public-hero-copy .public-eyebrow{font-size:8px;letter-spacing:1.3px}.public-site .public-hero-banner h1{font-size:clamp(45px,12vw,60px);line-height:1.04;letter-spacing:-2.7px;margin:17px 0 13px}.public-site .public-hero-banner .public-hero-copy>p{font-size:13px;line-height:1.7;margin-bottom:19px}.public-site .public-hero-banner .public-hero-actions{gap:9px 11px}.public-site .public-hero-banner .public-hero-actions .primary-button,.public-site .public-hero-banner .public-login-cta{min-height:43px;height:43px;padding:0 12px;font-size:10px}.public-site .public-hero-banner .public-text-button{font-size:10px}.public-site .public-hero-banner .public-hero-trust{gap:10px;margin-top:19px;padding-top:13px}.public-site .public-hero-banner .public-hero-trust>span{min-width:0;flex:1}.public-site .public-hero-banner .public-hero-trust b{font-size:9px}.public-site .public-hero-banner .public-hero-trust small{font-size:8px}.public-site .public-hero-banner .trust-icon{width:28px;height:28px}.public-site .public-hero-banner .hero-category-rail{position:relative;inset:auto;width:100%;min-height:0;gap:12px 17px;padding:14px 0 3px}.public-site .public-hero-banner .hero-category-rail>span{font-size:8px}.public-site .public-hero-banner .hero-category-rail>a{font-size:9px}}
