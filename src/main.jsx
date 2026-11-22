@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import {
-  ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
+  ArrowLeft, ArrowRight, ArrowDown, ArrowUpRight, BedDouble, Building2, CalendarDays, Check, ChevronDown,
   CircleHelp, Clock3, FileText, Filter, Home, KeyRound, LayoutDashboard, LogOut, MessageCircle, UserRound,
   Menu, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Sparkles,
   Trash2, Users, Wallet, X, MapPin, Heart, Bell, Wrench, Download, PenLine, AlertTriangle, Eye, Phone, Mail, Camera,
@@ -129,21 +129,7 @@ function BrandWatermark() {
   return <div className="brand-watermark" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <BrandSymbol key={index}/>)}</div>;
 }
 
-function ScrollNavigation() {
-  const [position, setPosition] = useState({ top: 0, bottom: false });
-  useEffect(() => {
-    const update = () => setPosition({ top: window.scrollY, bottom: window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 24 });
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    const observer = new ResizeObserver(update);
-    observer.observe(document.body);
-    return () => { window.removeEventListener('scroll', update); window.removeEventListener('resize', update); observer.disconnect(); };
-  }, []);
-  return <div className="scroll-navigation" aria-label="Page navigation">
-    {position.top > 180 && <button type="button" aria-label="Back to top" title="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18}/><span>Back to top</span></button>}
-  </div>;
-}
+function ScrollNavigation() { return null; }
 
 function AuthLoadingScreen({ onContinue }) {
   const [slow, setSlow] = useState(false);
@@ -1792,7 +1778,12 @@ function PublicLanding({ properties, onSignIn, onComplaint }) {
       </details><p className="support-legal-note">These general website guidelines are provided for information and do not replace the terms of a specific property agreement or advice from a qualified professional. Please have the policies reviewed for your business and local requirements before relying on them as formal legal documents.</p></section>
       </>}
     </main>
-    <footer className="public-footer"><div className="footer-main"><a className="public-brand" href="#top"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><p>Property, made clearer.<br/><span>Discover, connect and manage spaces across Nigeria.</span></p><nav aria-label="Footer navigation"><a href="#homes">Find a property</a><a href="#features">Platform features</a><button onClick={onComplaint}>Complaint room</button><a href="mailto:hello@yemilazproperties.com">Contact</a></nav><div className="footer-account"><button onClick={onSignIn}>Sign in</button></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Yemilaz Properties</span><div>{PUBLIC_POLICIES.map((policy) => <button key={policy.id} onClick={() => openPolicy(policy.id)}>{policy.title}</button>)}</div><span>Made for every kind of property.</span></div></footer>
+    <footer className="public-footer"><div className="footer-main">
+      <div className="footer-brand-block"><a className="public-brand" href="#top" aria-label="Yemilaz Properties home"><BrandLockup name="Yemilaz Properties" logo="horizon"/></a><p>Property, made clearer.<br/><span>Discover, connect and manage spaces across Nigeria.</span></p></div>
+      <div className="footer-link-group"><span className="footer-group-title">EXPLORE</span><nav aria-label="Explore Yemilaz Properties"><a href="#homes">Find a property</a><a href="#features">Platform features</a><a href="#about" onClick={(event) => { event.preventDefault(); openAbout(); }}>About us</a></nav></div>
+      <div className="footer-link-group"><span className="footer-group-title">SUPPORT</span><nav aria-label="Support"><button onClick={onComplaint}>Complaint room</button><a href="mailto:hello@yemilazproperties.com">Contact support</a><button onClick={() => openPolicy('website-terms')}>Website terms</button></nav></div>
+      <div className="footer-account"><span className="footer-group-title">YOUR ACCOUNT</span><button onClick={onSignIn}><KeyRound size={14}/> Sign in</button></div>
+    </div><div className="footer-bottom"><span>© {new Date().getFullYear()} Yemilaz Properties</span><div>{PUBLIC_POLICIES.map((policy) => <button key={policy.id} onClick={() => openPolicy(policy.id)}>{policy.title}</button>)}</div><span>Built for every kind of property.</span></div></footer>
     {wantedOpen && <WantedRequestDialog message={wantedMessage} setMessage={setWantedMessage} onClose={() => setWantedOpen(false)}/>}
     {selectedMember && <PublicMemberProfileDialog member={selectedMember} onClose={() => setSelectedMember(null)} onMessage={(member) => { setSelectedMember(null); setContactMember(member); }}/>}
     {contactMember && <PublicMemberMessageDialog member={contactMember} onClose={() => setContactMember(null)}/>}

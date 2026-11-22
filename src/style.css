@@ -1045,3 +1045,27 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .public-site .public-footer{max-width:1240px}
 @media(max-width:900px){.public-site .public-hero{padding:52px 30px 58px}.public-site .public-hero-photo{height:360px}.public-site .public-listings{padding:48px 30px 58px}.public-site .public-about{padding:55px 30px}.public-site .public-support{padding:46px 30px 54px}.public-site .community-spotlight{padding:36px 30px 16px}}
 @media(max-width:650px){.public-site .public-nav{padding-inline:18px}.public-site .public-hero{padding:38px 18px 42px}.public-site .public-hero-photo{height:250px}.public-site .market-overview{padding-block:45px 48px}.public-site .community-spotlight{padding:24px 15px 4px}.public-site .public-listings{padding:37px 18px 45px}.public-site .public-listings .property-image{height:185px}.public-site .public-features{padding:49px 18px 54px}.public-site .public-about{padding:43px 18px}.public-site .public-support{padding:36px 18px 28px}.public-site .public-footer{padding-inline:18px}}
+
+/* Refined public footer and remove the floating back-to-top control. */
+.scroll-navigation{display:none!important}
+.public-site .public-footer{max-width:none;margin:0;padding:48px max(28px,calc((100vw - 1240px)/2)) 18px;background:linear-gradient(135deg,#102f35 0%,#123e3c 58%,#10332f 100%);color:#d5e1dd;border-top:1px solid #d3b36b}
+.public-site .footer-main{max-width:1240px;grid-template-columns:minmax(230px,1.55fr) minmax(130px,.8fr) minmax(150px,.9fr) auto;align-items:start;gap:36px;padding-bottom:34px}
+.footer-brand-block{display:grid;justify-items:start;gap:15px}
+.footer-brand-block .public-brand .brand-lockup>img{width:48px;height:48px}
+.footer-brand-block .public-brand .brand-lockup>span>b{color:#fff;font-size:16px}
+.footer-brand-block .public-brand .brand-lockup>span>small{color:#d7bb7d;letter-spacing:2px}
+.public-site .footer-main>p{color:#f4f7f5;font-size:12px;line-height:1.7}
+.public-site .footer-main>p span{color:#afc2bd;font-size:10px;line-height:1.7}
+.footer-link-group{display:grid;align-content:start;gap:13px}
+.footer-group-title{color:#d7bb7d;font-size:9px;font-weight:750;letter-spacing:1.5px}
+.public-site .footer-main .footer-link-group nav{display:grid;justify-items:start;gap:11px;padding:0;border:0}
+.public-site .footer-main nav a,.public-site .footer-main nav button{padding:0;color:#d7e1de;font-size:11px;font-weight:550;transition:color .16s ease}
+.public-site .footer-main nav a:hover,.public-site .footer-main nav button:hover{color:#f0d38b}
+.public-site .footer-account{display:grid;justify-items:start;gap:13px;padding:0;border:0}
+.public-site .footer-account button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 15px;border:1px solid #69867d;border-radius:8px;background:#ffffff0a;color:#fff;font-size:11px;transition:background .18s,border-color .18s}
+.public-site .footer-account button:hover{border-color:#d7bb7d;background:#ffffff14;color:#f0d38b}
+.public-site .footer-bottom{max-width:1240px;min-height:48px;padding-top:14px;border-color:#ffffff24;color:#a9bbb6;font-size:9px}
+.public-site .footer-bottom>div{gap:9px 18px}
+.public-site .footer-bottom button{color:#c4d1cd;font-size:9px;transition:color .16s}
+@media(max-width:900px){.public-site .public-footer{padding:38px 30px 16px}.public-site .footer-main{grid-template-columns:1fr 1fr;gap:25px 32px}.footer-brand-block{grid-column:1/-1}.public-site .footer-account{justify-self:start}.public-site .footer-bottom{align-items:flex-start}.public-site .footer-bottom>div{order:0;width:auto;justify-content:flex-end}}
+@media(max-width:570px){.public-site .public-footer{padding:32px 18px 15px}.public-site .footer-main{grid-template-columns:1fr 1fr;gap:24px 18px;padding-bottom:24px}.footer-brand-block{grid-column:1/-1;gap:11px}.public-site .footer-main>p{font-size:11px}.public-site .footer-link-group{gap:10px}.public-site .footer-main .footer-link-group nav{gap:10px}.public-site .footer-main nav a,.public-site .footer-main nav button{font-size:10px}.public-site .footer-account{grid-column:1/-1;gap:9px}.public-site .footer-account button{min-height:38px}.public-site .footer-bottom{display:grid;grid-template-columns:1fr;gap:10px;padding-top:13px}.public-site .footer-bottom>div{justify-content:flex-start;gap:9px 15px}.public-site .footer-bottom button{font-size:9px}}
