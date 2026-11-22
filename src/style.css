@@ -1143,3 +1143,46 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .public-site .support-intro,.public-site .support-grid p{line-height:1.45}
 @media(max-width:900px){.public-site .market-overview{padding-block:48px 52px}.public-site .public-features{padding-top:55px;padding-bottom:58px}.public-site .public-about{padding-top:46px;padding-bottom:46px;gap:26px}}
 @media(max-width:650px){.public-site .public-hero-banner .public-hero-copy{padding-top:70px;padding-bottom:23px}.public-site .public-hero-banner .public-hero-copy>p{line-height:1.55;margin-bottom:16px}.public-site .public-hero-banner .public-hero-trust{margin-top:15px;padding-top:11px}.public-site .public-hero-banner .hero-category-rail{padding-top:10px;row-gap:9px}.public-site .market-overview{padding-block:37px 40px}.public-site .community-spotlight{padding-top:19px;padding-bottom:2px}.public-site .public-listings{padding-top:31px;padding-bottom:38px}.public-site .public-section-heading p{line-height:1.5}.public-site .public-features{padding-top:40px;padding-bottom:43px}.public-site .public-features-heading{margin-bottom:21px}.public-site .feature-category-group{margin-bottom:19px}.public-site .public-about{padding-top:35px;padding-bottom:35px;gap:13px}.public-site .public-about>p{line-height:1.55}.public-site .public-support{padding-top:24px;padding-bottom:24px}}
+
+.account-profile-page .welcome-row{align-items:center;margin-bottom:8px}
+.account-profile-page .welcome-row h1{margin:5px 0;font-size:clamp(25px,3vw,34px);letter-spacing:-1.1px}
+.account-profile-page .welcome-row p{max-width:590px;line-height:1.6}
+.account-profile-progress{display:grid;justify-items:center;gap:2px;min-width:104px;padding:13px 16px;border:1px solid #dce9e1;border-radius:13px;background:linear-gradient(140deg,#f1f8f3,#fff);color:#17665d}
+.account-profile-progress b{font:750 23px Manrope,sans-serif;letter-spacing:-1px}
+.account-profile-progress small{font-size:9px;color:#74847b}
+.account-profile-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(250px,.75fr);gap:16px;align-items:start}
+.account-profile-form,.account-verification-card{padding:23px;border:1px solid #e1e9e4;border-radius:14px;background:#fff;box-shadow:0 9px 28px #143c3209}
+.account-profile-form{display:grid;gap:15px}
+.account-profile-section-heading{display:flex;align-items:center;gap:12px;margin:5px 0 0;padding-bottom:12px;border-bottom:1px solid #edf1ee}
+.account-profile-section-heading>span,.account-verification-icon{width:38px;height:38px;display:grid;place-items:center;flex:none;border-radius:11px;background:#eaf3ee;color:#17665d}
+.account-profile-section-heading h2,.account-verification-card h2{margin:0;color:#17353a;font:700 17px Manrope,sans-serif;letter-spacing:-.45px}
+.account-profile-section-heading p{margin:3px 0 0;color:#78877f;font-size:10px;line-height:1.5}
+.account-profile-form>label,.account-profile-form .form-row>label{display:grid;align-content:start;gap:7px;color:#354b48;font-size:11px;font-weight:650}
+.account-profile-form label small{display:inline;color:#87928d;font-size:9px;font-weight:450}
+.account-profile-form input,.account-profile-form textarea{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid #dfe7e2;border-radius:8px;background:#fcfdfc;color:#213738;font:500 12px 'DM Sans',sans-serif;outline:none}
+.account-profile-form textarea{min-height:85px;resize:vertical;line-height:1.55}
+.account-profile-form input:focus,.account-profile-form textarea:focus{border-color:#328878;box-shadow:0 0 0 3px #32887819;background:#fff}
+.account-profile-form .form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.account-profile-form-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:2px;padding-top:15px;border-top:1px solid #edf1ee}
+.account-profile-form-footer>small,.account-verification-note{max-width:360px;color:#7c8983;font-size:9px;line-height:1.55}
+.account-profile-form-footer .primary-button,.account-verification-card .primary-button{min-height:42px;height:auto;padding:0 15px;white-space:nowrap}
+.account-profile-feedback{margin:0;padding:11px 12px;border-radius:8px;background:#eff7f1;color:#26634c;font-size:11px;line-height:1.5}
+.account-verification-column{display:grid;gap:12px}
+.account-verification-card{display:grid;justify-items:start;gap:11px;padding:20px}
+.account-verification-card .eyebrow{color:#9a8050;font-size:8px;letter-spacing:1.2px}
+.account-verification-card h2{font-size:19px}
+.account-verification-card>p{margin:0;color:#718079;font-size:11px;line-height:1.65}
+.account-verification-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #e4ebe6;border-radius:100px;background:#f6f8f6;color:#68776f;font-size:10px;font-weight:700}
+.account-verification-status i{width:7px;height:7px;border-radius:50%;background:#a2aaa5}
+.account-verification-status.verified{border-color:#cfe6d8;background:#eef8f1;color:#28734c}
+.account-verification-status.verified i{background:#2e9b60}
+.account-verification-status.pending{border-color:#f0e3c6;background:#fcf7eb;color:#8a6a2f}
+.account-verification-status.pending i{background:#d3a94f}
+.account-verification-status.rejected{border-color:#f0d8d5;background:#fcf1ef;color:#9f4b42}
+.account-verification-status.rejected i{background:#bf5f53}
+.account-verification-card .primary-button:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+.account-verification-note{max-width:none;margin:0}
+.account-verification-email h3{margin:0;color:#17353a;font:700 14px Manrope,sans-serif}
+.account-profile-loading{padding:24px;color:#63736c;font-size:12px}
+@media(max-width:900px){.account-profile-layout{grid-template-columns:minmax(0,1.35fr) minmax(230px,.8fr)}.account-profile-form,.account-verification-card{padding:18px}}
+@media(max-width:650px){.account-profile-page .welcome-row{align-items:flex-start;gap:12px}.account-profile-page .welcome-row h1{font-size:25px}.account-profile-page .welcome-row p{font-size:11px}.account-profile-progress{min-width:82px;padding:10px}.account-profile-progress b{font-size:19px}.account-profile-layout{grid-template-columns:minmax(0,1fr);gap:11px}.account-profile-form,.account-verification-card{padding:16px;border-radius:12px}.account-profile-form .form-row{grid-template-columns:minmax(0,1fr);gap:12px}.account-profile-form-footer{align-items:stretch;flex-direction:column}.account-profile-form-footer .primary-button,.account-verification-card .primary-button{width:100%;justify-content:center}.account-profile-section-heading h2{font-size:15px}}

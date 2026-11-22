@@ -62,6 +62,31 @@ Before deploying this version, open the project’s **Supabase Dashboard → SQL
 22. [`supabase/migrations/20261121_property_rules_and_shared_document_library.sql`](supabase/migrations/20261121_property_rules_and_shared_document_library.sql)
 23. [`supabase/migrations/20261123_tenant_portal_daily_tools.sql`](supabase/migrations/20261123_tenant_portal_daily_tools.sql)
 24. [`supabase/migrations/20261124_account_upgrade_requests.sql`](supabase/migrations/20261124_account_upgrade_requests.sql)
+25. [`supabase/migrations/20261125_nigeria_market_overview.sql`](supabase/migrations/20261125_nigeria_market_overview.sql)
+26. [`supabase/migrations/20261126_platform_staff_permissions.sql`](supabase/migrations/20261126_platform_staff_permissions.sql)
+
+The additional migrations below were added after the original 26-file list. Apply any that are not already present in the database in filename order:
+
+- [`supabase/migrations/20261121_service_charge_period_dates.sql`](supabase/migrations/20261121_service_charge_period_dates.sql)
+- [`supabase/migrations/20261121_staff_payment_records.sql`](supabase/migrations/20261121_staff_payment_records.sql)
+- [`supabase/migrations/20261127_caretaker_operations.sql`](supabase/migrations/20261127_caretaker_operations.sql)
+- [`supabase/migrations/20261128_rent_schedule_accounting.sql`](supabase/migrations/20261128_rent_schedule_accounting.sql)
+- [`supabase/migrations/20261129_rent_renewal_due_charge.sql`](supabase/migrations/20261129_rent_renewal_due_charge.sql)
+- [`supabase/migrations/20261130_create_rent_charges_when_due.sql`](supabase/migrations/20261130_create_rent_charges_when_due.sql)
+- [`supabase/migrations/20261201_reconcile_initial_rent_receipts.sql`](supabase/migrations/20261201_reconcile_initial_rent_receipts.sql)
+- [`supabase/migrations/20261202_tenant_dashboard_expired_renewal_charge.sql`](supabase/migrations/20261202_tenant_dashboard_expired_renewal_charge.sql)
+- [`supabase/migrations/20261203_payment_transaction_actions.sql`](supabase/migrations/20261203_payment_transaction_actions.sql)
+- [`supabase/migrations/20261204_professional_agreement_and_property_rules.sql`](supabase/migrations/20261204_professional_agreement_and_property_rules.sql)
+- [`supabase/migrations/20261205_extend_lease_on_rent_renewal_payment.sql`](supabase/migrations/20261205_extend_lease_on_rent_renewal_payment.sql)
+- [`supabase/migrations/20261206_rent_renewal_duration.sql`](supabase/migrations/20261206_rent_renewal_duration.sql)
+- [`supabase/migrations/20261207_tenant_team_assignments_and_notifications.sql`](supabase/migrations/20261207_tenant_team_assignments_and_notifications.sql)
+- [`supabase/migrations/20261208_profile_standing_levels.sql`](supabase/migrations/20261208_profile_standing_levels.sql)
+- [`supabase/migrations/20261209_opt_in_public_member_spotlight.sql`](supabase/migrations/20261209_opt_in_public_member_spotlight.sql)
+- [`supabase/migrations/20261210_public_profile_contact_and_messages.sql`](supabase/migrations/20261210_public_profile_contact_and_messages.sql)
+- [`supabase/migrations/20261211_multi_role_account_portals.sql`](supabase/migrations/20261211_multi_role_account_portals.sql)
+- [`supabase/migrations/20261212_account_profile_photos.sql`](supabase/migrations/20261212_account_profile_photos.sql)
+- [`supabase/migrations/20261213_spotlight_profile_photos.sql`](supabase/migrations/20261213_spotlight_profile_photos.sql)
+- [`supabase/migrations/20261214_member_profile_and_identity_status.sql`](supabase/migrations/20261214_member_profile_and_identity_status.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -92,6 +117,8 @@ Migration 24 adds private account-upgrade requests and evidence storage, a role-
 Migration 25 adds a Nigerian market overview based on advertised asking prices. It records a listing’s initial advertised price and subsequent changes, then compares current median asking prices with observations at least 30 days old. A trend is shown only where at least three current comparable listings share the same area, property type, rent/sale category, and (for rentals) price period. The overview is not an official market index or a record of completed transactions. Apply migration 25 in Supabase SQL Editor before deploying the frontend; until then, the homepage shows a graceful unavailable state. Existing listings establish their baseline when this migration is applied, so trends appear after sufficient history has accumulated.
 
 Migration 26 lets the platform administrator grant selected work permissions to existing registered accounts: account-upgrade review, listing verification, and read-only complaint oversight. Assignments are managed in **Platform administration → Platform staff**; staff sign in through the separate administration entry and see only their assigned work pages. Staff cannot grant permissions, manage landlord access codes, or use the administrator-only people directory. Complaint reviewers can read cases and replies but cannot message or resolve them. Revoke or change assignments from the same page. A staff member must register their Yemilaz account before access can be assigned by email. Apply migration 26 in Supabase SQL Editor before deploying the frontend.
+
+The member-profile migration adds private profile details shared by every account role and an identity-check status table. Users can edit their name, phone, contact location, occupation, optional date of birth and emergency contact; property professionals can also add private business and licence details. Row-level security restricts profile details and verification status to the signed-in account. The website does not store raw NIN or biometric data. To activate live NIN verification, Yemilaz must first obtain the required NIMC/NINAuth verification-partner access and deploy an authenticated server endpoint that creates a hosted verification session and records provider results. Set `VITE_NINAUTH_START_URL` to that endpoint; never place provider credentials in browser variables. Until configured, the identity check is clearly shown as unavailable and no NIN is requested or collected. Apply `20261214_member_profile_and_identity_status.sql` before deploying the updated frontend.
 
 The sixth migration makes landlord account creation invitation-only. Each code is single-use, expires after a chosen period (1 hour to 7 days), and can be revoked. The code manager appears only to a platform administrator. After applying the migration, bootstrap the first administrator in SQL Editor by replacing `OWNER_EMAIL_HERE` with the email on the Yemilaz Properties owner account:
 
