@@ -1069,3 +1069,22 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .public-site .footer-bottom button{color:#c4d1cd;font-size:9px;transition:color .16s}
 @media(max-width:900px){.public-site .public-footer{padding:38px 30px 16px}.public-site .footer-main{grid-template-columns:1fr 1fr;gap:25px 32px}.footer-brand-block{grid-column:1/-1}.public-site .footer-account{justify-self:start}.public-site .footer-bottom{align-items:flex-start}.public-site .footer-bottom>div{order:0;width:auto;justify-content:flex-end}}
 @media(max-width:570px){.public-site .public-footer{padding:32px 18px 15px}.public-site .footer-main{grid-template-columns:1fr 1fr;gap:24px 18px;padding-bottom:24px}.footer-brand-block{grid-column:1/-1;gap:11px}.public-site .footer-main>p{font-size:11px}.public-site .footer-link-group{gap:10px}.public-site .footer-main .footer-link-group nav{gap:10px}.public-site .footer-main nav a,.public-site .footer-main nav button{font-size:10px}.public-site .footer-account{grid-column:1/-1;gap:9px}.public-site .footer-account button{min-height:38px}.public-site .footer-bottom{display:grid;grid-template-columns:1fr;gap:10px;padding-top:13px}.public-site .footer-bottom>div{justify-content:flex-start;gap:9px 15px}.public-site .footer-bottom button{font-size:9px}}
+
+/* Compact Help, policies & support into a concise, readable panel. */
+.public-site .public-support{padding:38px 42px 40px;border-top:1px solid #e8eee9}
+.public-site .support-heading{align-items:center;gap:24px;margin-bottom:15px}
+.public-site .public-support h2{margin:6px 0 0;font-size:25px;letter-spacing:-.55px}
+.public-site .support-intro{max-width:330px;font-size:10px;line-height:1.55}
+.public-site .support-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.public-site .support-grid article{min-width:0;min-height:100%;padding:13px 14px;align-items:flex-start;flex-direction:column;gap:9px;border-radius:10px;background:#fbfcfb}
+.public-site .support-grid h3{font-size:12px;line-height:1.35}
+.public-site .support-grid p{font-size:9px;line-height:1.5}
+.public-site .support-grid .policy-more-link{margin-top:auto;padding:0;font-size:9px}
+.public-site .support-grid .support-contact{grid-column:auto;background:#f1f6f3;border-color:#e2ebe5}
+.public-site .support-faq{margin-top:9px;padding:10px 13px;border-radius:10px;background:#f9fbfa}
+.public-site .support-faq>summary{font-size:10px}
+.public-site .support-faq .faq-item{margin-top:6px;padding:8px 10px}
+.public-site .support-faq .faq-item>summary{font-size:10px}
+.public-site .support-faq .faq-item p{font-size:9px;line-height:1.55}
+@media(max-width:900px){.public-site .public-support{padding:34px 26px 36px}.public-site .support-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.public-site .support-heading{align-items:flex-start}}
+@media(max-width:650px){.public-site .public-support{padding:29px 17px 30px}.public-site .support-heading{display:grid;gap:6px;margin-bottom:12px}.public-site .public-support h2{font-size:22px}.public-site .support-intro{font-size:10px}.public-site .support-grid{grid-template-columns:1fr;gap:7px}.public-site .support-grid article{min-height:0;padding:11px 12px;gap:7px}.public-site .support-grid .policy-more-link{margin-top:0}.public-site .support-faq{margin-top:8px;padding:9px 11px}}
