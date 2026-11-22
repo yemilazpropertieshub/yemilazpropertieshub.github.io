@@ -790,11 +790,29 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .community-member-avatar{display:grid;place-items:center;width:48px;height:48px;overflow:hidden;border:2px solid #fff;border-radius:50%;background:#e8f2ed;color:#17665d;box-shadow:0 0 0 1px #dce8df,0 5px 14px #203c3012}
 .community-member-avatar img{display:block;width:100%;height:100%;object-fit:cover}
 .community-member-avatar>span{display:grid;place-items:center;width:100%;height:100%;font:700 13px Manrope,sans-serif;letter-spacing:.02em}
-.community-member-role{position:absolute;top:22px;left:65px;color:#708278;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.community-member-role{position:absolute;top:27px;left:78px;color:#708278;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.community-spotlight-card[role="button"]{cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.community-spotlight-card[role="button"]:hover,.community-spotlight-card[role="button"]:focus-visible{transform:translateY(-3px);border-color:#a9c8b7;box-shadow:0 15px 34px #183d2f1a;outline:none}
 .community-spotlight-card h3{margin:17px 0 5px;color:#213735;font:700 16px Manrope,sans-serif}
+.community-card-open-hint{display:inline-flex;align-items:center;gap:6px;margin-top:auto;padding-top:18px;color:#17665d;font-size:10px;font-weight:700}
 .community-spotlight-card>b{color:#17665d;font-size:11px}
 .community-spotlight-card p{margin:8px 0 14px;color:#68746c;font-size:11px;line-height:1.55}
 .community-member-level{display:inline-flex;align-items:center;gap:5px;margin-top:auto;padding:5px 8px;border-radius:999px;background:#edf5ef;color:#526f59;font-size:9px;font-weight:700}
+.community-spotlight-card .community-member-level{margin-top:12px}
+.public-member-profile-modal{position:relative;width:min(100%,520px);max-height:min(90dvh,760px);overflow:auto;padding:28px}
+.public-profile-close{position:absolute;top:16px;right:16px}
+.public-member-profile-identity{position:relative;display:flex;flex-direction:column;align-items:center;padding:10px 22px 22px;text-align:center}
+.public-member-profile-identity .community-member-avatar{width:92px;height:92px;margin-bottom:14px}
+.public-member-profile-identity .community-member-role{position:static;color:#738279;font-size:10px}
+.public-member-profile-identity h2{margin:8px 0 10px;color:#203634;font:750 22px/1.25 Manrope,sans-serif}
+.public-member-profile-identity .community-member-level{margin-top:0}
+.public-member-profile-details{padding:20px 0;border-top:1px solid #e8eee9}
+.public-member-profile-details>.eyebrow{color:#829087}
+.public-member-profile-details h3{margin:8px 0;color:#17665d;font:700 16px/1.4 Manrope,sans-serif}
+.public-member-profile-details>p{margin:0;color:#64736a;font-size:13px;line-height:1.7}
+.public-member-profile-details .community-member-contacts{padding-top:14px;border-top:1px solid #edf0ec}
+.public-member-profile-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:15px;border-top:1px solid #e8eee9}
+@media(max-width:600px){.public-member-profile-modal{padding:23px 18px}.public-member-profile-actions{display:grid;grid-template-columns:1fr 1.4fr}.public-member-profile-actions button{justify-content:center}}
 @media(max-width:650px){.public-profile-settings-heading,.community-spotlight-heading{display:grid;align-items:start}.community-spotlight{padding:24px 15px 4px}.community-spotlight-heading>.secondary-button{justify-self:start}.community-spotlight-grid{grid-template-columns:1fr}.community-spotlight-card{min-height:170px}.profile-standing-card .public-profile-settings .form-row{grid-template-columns:1fr}}
 
 /* Direct tenant team management shortcut and focused assignment form. */
