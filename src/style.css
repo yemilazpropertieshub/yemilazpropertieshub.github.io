@@ -1215,3 +1215,12 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .account-profile-loading{padding:24px;color:#63736c;font-size:12px}
 @media(max-width:900px){.account-profile-layout{grid-template-columns:minmax(0,1.35fr) minmax(230px,.8fr)}.account-profile-form,.account-verification-card{padding:18px}}
 @media(max-width:650px){.account-profile-page .welcome-row{align-items:flex-start;gap:12px}.account-profile-page .welcome-row h1{font-size:25px}.account-profile-page .welcome-row p{font-size:11px}.account-profile-progress{min-width:82px;padding:10px}.account-profile-progress b{font-size:19px}.account-profile-layout{grid-template-columns:minmax(0,1fr);gap:11px}.account-profile-form,.account-verification-card{padding:16px;border-radius:12px}.account-profile-form .form-row{grid-template-columns:minmax(0,1fr);gap:12px}.account-profile-form-footer{align-items:stretch;flex-direction:column}.account-profile-form-footer .primary-button,.account-verification-card .primary-button{width:100%;justify-content:center}.account-profile-section-heading h2{font-size:15px}}
+
+/* Additional operational tools */
+.document-library-tools,.reconciliation-filters{display:grid;grid-template-columns:minmax(220px,1fr) minmax(160px,.42fr);gap:12px;align-items:end;margin:0 0 16px}
+.document-library-tools label,.reconciliation-filters label{display:grid;gap:6px;color:#53615a;font-size:11px;font-weight:650}
+.document-library-tools .search-box,.reconciliation-filters .search-box{display:flex;align-items:center}
+.reconciliation-review-note{margin:14px 0 0;padding:12px 14px;border:1px solid #e4ece6;border-radius:10px;background:#f8faf8;color:#68766f;font-size:11px;line-height:1.55}
+.reconciliation-page .metric-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:850px){.reconciliation-page .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.document-library-tools,.reconciliation-filters{grid-template-columns:minmax(0,1fr)}}

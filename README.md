@@ -87,6 +87,7 @@ The additional migrations below were added after the original 26-file list. Appl
 - [`supabase/migrations/20261212_account_profile_photos.sql`](supabase/migrations/20261212_account_profile_photos.sql)
 - [`supabase/migrations/20261213_spotlight_profile_photos.sql`](supabase/migrations/20261213_spotlight_profile_photos.sql)
 - [`supabase/migrations/20261214_member_profile_and_identity_status.sql`](supabase/migrations/20261214_member_profile_and_identity_status.sql)
+- [supabase/migrations/20261215_release_reconciliation_moveout_identity_delivery.sql](supabase/migrations/20261215_release_reconciliation_moveout_identity_delivery.sql)
 
 The second migration creates private landlord profiles, per-landlord agreement and house-rule templates, assigned agent/caretaker fields, and a private email delivery history. New Supabase Auth accounts receive their own profile automatically. Existing accounts receive a default profile.
 
@@ -182,3 +183,14 @@ The Pages workflow uses the project URL directly and reads `VITE_SUPABASE_ANON_K
 3. Copy `.env.example` to `.env.local` and set Supabase URL, publishable/anon key, and document API URL.
 4. For a new project, run `supabase/schema.sql`, then every migration above in order. For the existing project, apply any migrations not yet run, in order. Then bootstrap the platform administrator as described above.
 5. For the Node mail service, run `npm install` inside `server`, copy `server/.env.example` to `server/.env`, fill in its values, and run `npm start`.
+
+## Selected operational improvements
+
+This release adds a payment reconciliation view, move-out close-out workflow, identity verification consent record, retryable tenant email delivery tracking, searchable/categorized property documents, operating cost reporting, and a safer SQL migration release process. The release checklist is in [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md); database migration instructions are in [`supabase/MIGRATION_RUNBOOK.md`](supabase/MIGRATION_RUNBOOK.md).
+
+### Required setup for provider-backed features
+
+- Apply [`supabase/migrations/20261215_release_reconciliation_moveout_identity_delivery.sql`](supabase/migrations/20261215_release_reconciliation_moveout_identity_delivery.sql) after the previously listed migrations, if it has not already been applied. Then deploy matching frontend and server code.
+- Email retries are recorded as separate attempts. To receive delivery/bounce updates, configure a Resend webhook at `https://<your-document-service-host>/webhooks/resend`, subscribe to delivery, bounce, complaint, and delayed events, and add `RESEND_WEBHOOK_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` in the Node service's private environment. Do not expose either as a `VITE_*` value.
+- Live NIN checks require a contracted/approved verification provider and its hosted HTTPS verification endpoint. Set `VITE_NINAUTH_START_URL` to that endpoint only after provider onboarding. The site stores a consent timestamp/version and returned status; it does not collect raw NIN, identity images, or biometrics.
+- The migration manifest is a checksum review tool, not a database-applied tracker. Confirm successful SQL execution in the intended Supabase project before recording it in the protected migration history table.

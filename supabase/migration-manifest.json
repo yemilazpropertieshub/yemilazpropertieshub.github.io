@@ -1,0 +1,193 @@
+{
+  "format": 1,
+  "migrations": [
+    {
+      "file": "20261101_property_allocation_and_advertising.sql",
+      "sha256": "00aaa843220841c29b77cedd25f90bb55256123f0c0d66d2f0a663009ad6ec45"
+    },
+    {
+      "file": "20261102_landlord_profiles_and_tenant_packets.sql",
+      "sha256": "d22bd401313f6691b017499505381cc6a97072487efd9de73e392dcd8ad4048d"
+    },
+    {
+      "file": "20261103_property_photos_and_pdf_receipts.sql",
+      "sha256": "0896252203a80d051342ca08d5dd125fea4a614d3b8fc7e368668c539e050c72"
+    },
+    {
+      "file": "20261104_international_property_locations.sql",
+      "sha256": "179df226ccf96ea4c05d0473ffd4a6c7bcc1a512f82ddf4229794780a97f2c1a"
+    },
+    {
+      "file": "20261105_landlord_branding_templates.sql",
+      "sha256": "98a04ca79385ee291c6a1fe1fd78728b08a5e08d03bdf4565110cf74a13a53d8"
+    },
+    {
+      "file": "20261105_transaction_edit_void.sql",
+      "sha256": "3d6f08b97c3cadf6f7e328048861109f0160215e731921f6885aef5da5a20c98"
+    },
+    {
+      "file": "20261106_landlord_invitation_security.sql",
+      "sha256": "e36482bd7696d4a006130d7ba9c4cfb51fefc52b4e8a36b0e2edf20c030a5e6f"
+    },
+    {
+      "file": "20261107_public_property_complaints.sql",
+      "sha256": "d5cca79b6bb457ce82a06bf8fd95ba6181d420123af8ea3682cf597c8a08e950"
+    },
+    {
+      "file": "20261108_listing_and_resolution_workflows.sql",
+      "sha256": "681f58e111cc879dc8bdc735ec3a0d758311934d14f2f569e6b557fb0c8b0f7b"
+    },
+    {
+      "file": "20261109_tenant_workspace.sql",
+      "sha256": "4dd3fcb29f84026c593cb04b281f211dd6fa91e53ef8832534cd55137ed1f085"
+    },
+    {
+      "file": "20261110_platform_contact_directory.sql",
+      "sha256": "3b7f9d31db09ea4807ea27bbd72b6b11561978e5347b831cfbc4c48f809a52a8"
+    },
+    {
+      "file": "20261111_property_wanted_requests.sql",
+      "sha256": "26ada3f8dd18353318252b393a6fc7ce6db228f7d34c7e81b2ec06a5c1b36f90"
+    },
+    {
+      "file": "20261112_people_account_invitations.sql",
+      "sha256": "cbca82a6c67899eca05fafb8f8e6fc5594fe3e025f0430ad1db05e886f5af4c3"
+    },
+    {
+      "file": "20261113_platform_admin_complaint_inbox.sql",
+      "sha256": "475507675e66fc3cf305014be019878e0a89e079622c80359ede9c95b3d4c5af"
+    },
+    {
+      "file": "20261114_fix_tenant_rls_recursion.sql",
+      "sha256": "108b717b781127d3236ad145622920a7f09b77fd2c336eb3240b977955d06f17"
+    },
+    {
+      "file": "20261115_property_operations_suite.sql",
+      "sha256": "8705a0fe65b366548015f9f272e9f7e0fcdb541ca3e39df14712db972e6218fe"
+    },
+    {
+      "file": "20261116_accountability_and_operations.sql",
+      "sha256": "1ecd1e1567227a8255e1fcab8f731965bd329229974c0c8c631d28419fa5fb31"
+    },
+    {
+      "file": "20261117_property_communication_roles.sql",
+      "sha256": "ebc354b21b82fff62eb73a9eca56912171f7bfe898ecc3c37900802fcf2911f8"
+    },
+    {
+      "file": "20261118_fix_property_contact_rpc_types.sql",
+      "sha256": "8d76d81151ca9faecf8ca169ee046ff5a6652cff875b165a5008b26f1382ff8c"
+    },
+    {
+      "file": "20261119_property_message_notifications.sql",
+      "sha256": "34a170098dc01b6cb3f8a014f7e64cb3e97f5ae04894dfdbe90666ecc038a1f4"
+    },
+    {
+      "file": "20261120_universal_property_categories.sql",
+      "sha256": "0e8888c4123a1b4e4058fdb70ab550df8e2408c54468a273f4c163c0f256d62f"
+    },
+    {
+      "file": "20261121_property_rules_and_shared_document_library.sql",
+      "sha256": "5312cec068c9ee1cfed41f03aa901f818cdfaefda12f0153e669082d3ec8712f"
+    },
+    {
+      "file": "20261121_service_charge_period_dates.sql",
+      "sha256": "e8933c7477af3df2138fd66fcf3a2930718fc2933cfded7a644df038fb6bbd78"
+    },
+    {
+      "file": "20261121_staff_payment_records.sql",
+      "sha256": "7a41e1e100c0ba168eca15c1e603f342122b0bc58fc0f08830c09741915d369c"
+    },
+    {
+      "file": "20261123_tenant_portal_daily_tools.sql",
+      "sha256": "2ed7930f27e5c902fdcd3a4c2d9890509709ef811e30adbf728674db068b59cc"
+    },
+    {
+      "file": "20261124_account_upgrade_requests.sql",
+      "sha256": "2dbd05070403e6d6aaffdd5aaea305930cce073591c25d763c26d9d2f7e6512b"
+    },
+    {
+      "file": "20261125_nigeria_market_overview.sql",
+      "sha256": "28b74c26b3fb41fa593371b246c3996545328c9349998cc342e804671600f728"
+    },
+    {
+      "file": "20261126_platform_staff_permissions.sql",
+      "sha256": "a4fdc21663cf9f16aa5c9a0f1331d0079923a551605f3301d3b95782fa70f8ea"
+    },
+    {
+      "file": "20261127_caretaker_operations.sql",
+      "sha256": "8909204789af4f78e943b7c82455105d68883cd0ad402ef9289807243f914c4b"
+    },
+    {
+      "file": "20261128_rent_schedule_accounting.sql",
+      "sha256": "bdf44af2236d8bf05cd21923ac30fe89f7e036f3bf9b6fd6850fdbc70b2ae2c3"
+    },
+    {
+      "file": "20261129_rent_renewal_due_charge.sql",
+      "sha256": "4d34f390f6a310bb3a40f4d8fbd88a1883ede2a13120ca5dcdeb33d384291296"
+    },
+    {
+      "file": "20261130_create_rent_charges_when_due.sql",
+      "sha256": "cb7d4f92691ff4800fbefc1cfbfc14f5fd2060b5785af3671b645557814f4bd4"
+    },
+    {
+      "file": "20261201_reconcile_initial_rent_receipts.sql",
+      "sha256": "fcce6465e2d2dcacfdfb422841ce3274500ea0fa87f229abe8f1fc069b63e9b5"
+    },
+    {
+      "file": "20261202_tenant_dashboard_expired_renewal_charge.sql",
+      "sha256": "c5e2875999828f6572e506ddb27d0f845716c569bed3a5dea9672827a671ac1b"
+    },
+    {
+      "file": "20261203_payment_transaction_actions.sql",
+      "sha256": "15d6276d8d0c6fe0165adfbb681fccc77b37f8c4432f08cdbb08c6132266e671"
+    },
+    {
+      "file": "20261204_professional_agreement_and_property_rules.sql",
+      "sha256": "2d2c23626f8e8649e187052488708a00c5959abaab8360820b7e9a46f70afb4d"
+    },
+    {
+      "file": "20261205_extend_lease_on_rent_renewal_payment.sql",
+      "sha256": "ef7f7ef12150f79585c4ce797592c4904d7757826c9226f0988de1590e2c24e6"
+    },
+    {
+      "file": "20261206_rent_renewal_duration.sql",
+      "sha256": "01a3cc1f2ef6a4573e94103a0c484c26f0c5c79526ccac604fe7c343f1236928"
+    },
+    {
+      "file": "20261207_tenant_team_assignments_and_notifications.sql",
+      "sha256": "d1bb56845450b69760506a0cce7253a60acaa9d780a97e4a999782b13105554b"
+    },
+    {
+      "file": "20261208_profile_standing_levels.sql",
+      "sha256": "13bc7144cef4091c4886db1cbb983aa26b8e79b54296be2cf5ce5b8f464aab6f"
+    },
+    {
+      "file": "20261209_opt_in_public_member_spotlight.sql",
+      "sha256": "8bb84af0912bc30aa5282e1c13a23dc69edd19449c3ed17dfa666ffc21099c8f"
+    },
+    {
+      "file": "20261210_public_profile_contact_and_messages.sql",
+      "sha256": "a95be6d71b2ad161c3620e305a4c4c631ac670408d0b066c9c4c3465d3040b98"
+    },
+    {
+      "file": "20261211_multi_role_account_portals.sql",
+      "sha256": "e1a58b1553eb07c8e39554178a989c3b63c1198c32c93cf75a15d012d7916a5e"
+    },
+    {
+      "file": "20261212_account_profile_photos.sql",
+      "sha256": "b203230360dc154f511e007561e20866ce5344fbeee795712ecb8c98735b48cd"
+    },
+    {
+      "file": "20261213_spotlight_profile_photos.sql",
+      "sha256": "4366c91d6a394dd89aeb9d1e1028f5bf7216b24c502ec7f8e5e2520df8b0d027"
+    },
+    {
+      "file": "20261214_member_profile_and_identity_status.sql",
+      "sha256": "4f4000b63f8e8d7625b2ad30ed8c40e0820fa9b7b031c846929f294241c1b49a"
+    },
+    {
+      "file": "20261215_release_reconciliation_moveout_identity_delivery.sql",
+      "sha256": "9505821eb8ac94b9f92076312a33ad7e9747996c23bfcc37675d0dae8c09219e"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createPdf, createPaymentReceiptPdf, createRecordUpdatePdf, createTenantDocumentSet } from './pdf.mjs';
 
 const app = express();
@@ -7,10 +8,12 @@ const port = Number(process.env.PORT || 3000);
 const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const resendApiKey = process.env.RESEND_API_KEY;
+const resendWebhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const sender = process.env.RESEND_FROM_EMAIL;
 const allowedOrigins = (process.env.FRONTEND_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean);
 
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '32kb', verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin || allowedOrigins.includes(origin)) {
@@ -85,7 +88,7 @@ async function authenticate(accessToken) {
   return response.json();
 }
 
-async function recordDelivery(delivery, ownerId, tenantId, accessToken) {
+async function recordDelivery(delivery, ownerId, tenantId, accessToken, retryOf = null, attemptNumber = 1) {
   try {
     await supabaseRequest('tenant_packet_deliveries', accessToken, {
       method: 'POST',
@@ -94,6 +97,7 @@ async function recordDelivery(delivery, ownerId, tenantId, accessToken) {
         owner_id: ownerId, tenant_id: tenantId, recipient_role: delivery.role,
         recipient_email: delivery.email, status: delivery.status,
         provider_id: delivery.providerId || null, error_message: delivery.error || null,
+        retry_of: retryOf, attempt_number: attemptNumber, provider_status: 'unknown',
       }),
     });
   } catch (error) {
@@ -146,6 +150,37 @@ async function saveParticipantDocuments({ files, recipients, ownerId, tenantId, 
 
 app.get('/health', (_req, res) => res.json({ ok: true, downloadConfigured: Boolean(configReady('download')), emailConfigured: Boolean(configReady('email')) }));
 
+app.post('/webhooks/resend', async (req, res) => {
+  if (!resendWebhookSecret || !supabaseServiceRoleKey) return res.status(503).json({ error: 'Email delivery updates are not configured.' });
+  const id = req.get('svix-id');
+  const timestamp = req.get('svix-timestamp');
+  const signatureHeader = req.get('svix-signature') || '';
+  if (!id || !timestamp || !req.rawBody || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return res.status(400).json({ error: 'Invalid or expired webhook request.' });
+  const secret = Buffer.from(resendWebhookSecret.replace(/^whsec_/, ''), 'base64');
+  const expected = createHmac('sha256', secret).update(`${id}.${timestamp}.${req.rawBody.toString('utf8')}`).digest('base64');
+  const valid = signatureHeader.split(' ').some((part) => {
+    const [, value] = part.split(',', 2);
+    if (!value) return false;
+    const received = Buffer.from(value);
+    const expectedBuffer = Buffer.from(expected);
+    return received.length === expectedBuffer.length && timingSafeEqual(received, expectedBuffer);
+  });
+  if (!valid) return res.status(401).json({ error: 'Webhook signature could not be verified.' });
+  const event = req.body || {};
+  const providerStatus = ({ 'email.delivered': 'delivered', 'email.bounced': 'bounced', 'email.complained': 'complained', 'email.delivery_delayed': 'delivery_delayed' })[event.type];
+  const providerId = event.data?.email_id || event.data?.id;
+  if (!providerStatus || !providerId) return res.json({ received: true, updated: false });
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/tenant_packet_deliveries?provider_id=eq.${encodeURIComponent(providerId)}`, {
+      method: 'PATCH',
+      headers: { apikey: supabaseServiceRoleKey, Authorization: `Bearer ${supabaseServiceRoleKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ provider_status: providerStatus, provider_event_id: id }),
+    });
+    if (!response.ok) throw new Error(`Delivery update failed (${response.status}).`);
+    return res.json({ received: true, updated: true });
+  } catch (error) { console.error('Resend webhook update failed:', error.message); return res.status(500).json({ error: 'Could not record the provider delivery update.' }); }
+});
+
 app.post('/api/tenant-packets', async (req, res) => {
   const action = ['download', 'tenant-download'].includes(req.body?.action) ? req.body.action : 'email';
   const isDownload = action !== 'email';
@@ -197,7 +232,20 @@ app.post('/api/tenant-packets', async (req, res) => {
       { role: 'agent', name: agent?.full_name, email: agent?.email },
       { role: 'caretaker', name: caretaker?.full_name, email: caretaker?.email },
     ].filter((recipient) => recipient.role === 'landlord' || recipient.role === 'tenant' || (recipient.role === 'guarantor' && guarantor) || (recipient.role === 'lawyer' && (landlord.lawyer_name || landlord.lawyer_email)) || (recipient.role === 'agent' && agent) || (recipient.role === 'caretaker' && caretaker));
-    const recipients = allRecipients.filter((recipient) => recipient.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email));
+    let recipients = allRecipients.filter((recipient) => recipient.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email));
+    const requestedRetryOf = String(req.body?.retryOf || '');
+    const requestedRecipient = String(req.body?.recipientEmail || '').trim().toLowerCase();
+    let attemptNumber = 1;
+    if (requestedRetryOf || requestedRecipient) {
+      if (!/^[0-9a-f-]{36}$/i.test(requestedRetryOf) || !requestedRecipient) return res.status(400).json({ error: 'A failed delivery and its recipient email are required to retry.' });
+      const previousRows = await supabaseRequest(`tenant_packet_deliveries?id=eq.${requestedRetryOf}&owner_id=eq.${user.id}&tenant_id=eq.${tenant.id}&select=id,status,recipient_email,attempt_number`, accessToken);
+      const previous = previousRows?.[0];
+      if (!previous || previous.status !== 'failed' || previous.recipient_email?.toLowerCase() !== requestedRecipient) return res.status(409).json({ error: 'Only the same recipient’s failed delivery can be retried.' });
+      recipients = recipients.filter((recipient) => recipient.email.toLowerCase() === requestedRecipient);
+      if (!recipients.length) return res.status(404).json({ error: 'The failed recipient is no longer linked to this tenancy. Update the contact record before retrying.' });
+      const latestRows = await supabaseRequest(`tenant_packet_deliveries?owner_id=eq.${user.id}&tenant_id=eq.${tenant.id}&recipient_email=eq.${encodeURIComponent(requestedRecipient)}&select=attempt_number&order=created_at.desc&limit=1`, accessToken);
+      attemptNumber = Number(latestRows?.[0]?.attempt_number || previous.attempt_number || 1) + 1;
+    }
     if (!isDownload && !recipients.some((recipient) => recipient.role === 'tenant')) {
       return res.status(422).json({ error: 'Add a valid tenant email address before emailing tenancy documents.' });
     }
@@ -246,7 +294,7 @@ app.post('/api/tenant-packets', async (req, res) => {
       } catch (error) {
         delivery = { role: recipient.role, email: recipient.email, status: 'failed', error: error.message };
       }
-      await recordDelivery(delivery, user.id, tenant.id, accessToken);
+      await recordDelivery(delivery, user.id, tenant.id, accessToken, requestedRetryOf || null, attemptNumber);
       deliveries.push(delivery);
     }
     const dashboardDocumentCount = await saveParticipantDocuments({
