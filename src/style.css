@@ -787,6 +787,9 @@ body,.public-site{background:#f5f7f5;color:#102b35}
 .community-spotlight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .community-spotlight-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;min-height:205px;padding:18px;border:1px solid #e2e9e4;border-radius:14px;background:linear-gradient(145deg,#fff,#f7faf7);box-shadow:0 8px 24px #203c3010}
 .community-member-icon{display:grid;place-items:center;width:37px;height:37px;border-radius:12px;background:#e8f2ed;color:#17665d}
+.community-member-avatar{display:grid;place-items:center;width:48px;height:48px;overflow:hidden;border:2px solid #fff;border-radius:50%;background:#e8f2ed;color:#17665d;box-shadow:0 0 0 1px #dce8df,0 5px 14px #203c3012}
+.community-member-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.community-member-avatar>span{display:grid;place-items:center;width:100%;height:100%;font:700 13px Manrope,sans-serif;letter-spacing:.02em}
 .community-member-role{position:absolute;top:22px;left:65px;color:#708278;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .community-spotlight-card h3{margin:17px 0 5px;color:#213735;font:700 16px Manrope,sans-serif}
 .community-spotlight-card>b{color:#17665d;font-size:11px}
